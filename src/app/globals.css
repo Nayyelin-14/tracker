@@ -1,0 +1,362 @@
+@import "tailwindcss";
+
+/*
+ * EnergyTracker design system — "calm energy-tech".
+ * Warm ivory canvas, deep slate-blue ink, dusty slate-blue as the primary
+ * interactive/series color. Muted terracotta is reserved for selective
+ * emphasis. Amber/red are for real warnings and violations; green-family
+ * tones appear only as restrained success states — never as branding.
+ * Numbers live in IBM Plex Mono with tabular figures.
+ *
+ * Light is the default (:root) — the primary design direction. Dark is the
+ * [data-theme="dark"] override; the pre-paint script in layout.tsx applies
+ * the saved preference (defaulting to light).
+ *
+ * NOTE: color-scheme is set from JS (layout init script + ThemeToggle), not
+ * here — Lightning CSS folds scheme declarations into light/dark buckets and
+ * drops the [data-theme] override block when it sees them.
+ */
+
+:root {
+  /* Surfaces — warm ivory canvas, pure white cards (approved reference direction) */
+  --bg: #f5f1ea; /* Warm Ivory */
+  --surface-0: #ffffff; /* cards, panels, dialogs, elevated */
+  --surface-1: #faf7f2; /* subtle inset panels */
+  --surface-2: #f0ebe2; /* wells, inputs, inactive */
+  --surface-3: #e9e2d6; /* hover */
+  --border: #e5ded4; /* Warm Border */
+  --border-strong: #d8cfc1;
+  --shadow-card: 0 1px 2px rgba(41, 59, 80, 0.04), 0 1px 3px rgba(41, 59, 80, 0.04);
+  --shadow-elevated: 0 12px 32px -8px rgba(41, 59, 80, 0.16), 0 2px 8px rgba(41, 59, 80, 0.06);
+
+  /* Text — deep slate blue */
+  --text: #293b50; /* Deep Slate Blue */
+  --text-secondary: #777b80; /* Secondary Text */
+  --text-muted: #70747a; /* AA on white — timestamps/overlines stay readable */
+
+  /* Signals — blue carries identity, terracotta is selective, semantics
+   * preserved. One notch brighter than the original muted spec so the UI
+   * reads lively on the warm ivory canvas without turning saturated. */
+  --accent: #4f739d; /* Slate Blue — primary interactive / series (AA on fills) */
+  --accent-hover: #45688f;
+  --accent-on: #ffffff; /* text on slate-blue fills */
+  --accent-soft: rgba(79, 115, 157, 0.12);
+  --accent-text: #3e6288;
+  --highlight: #c87f5f; /* Terracotta — selective emphasis only */
+  --highlight-soft: rgba(200, 127, 95, 0.12);
+  --highlight-text: #ad6544;
+  --success: #4e8570; /* restrained success */
+  --success-soft: rgba(78, 133, 112, 0.12);
+  --success-text: #3f6e5b;
+  --warning: #be8a3c; /* threshold warnings */
+  --warning-soft: rgba(190, 138, 60, 0.14);
+  --warning-text: #98702a;
+  --critical: #c0574e; /* genuine errors / critical */
+  --critical-soft: rgba(192, 87, 78, 0.12);
+  --critical-text: #a3453d;
+  --info: #4f739d; /* neutral telemetry — slate blue, not a second accent */
+  --info-soft: rgba(79, 115, 157, 0.12);
+
+  /* Radii — generous, matching the reference cards */
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 14px;
+
+  /* Type — two families only.
+   * Manrope (UI) + IBM Plex Mono (data/technical). Roles are defined once in
+   * the scale below; tabular figures everywhere a value updates or aligns. */
+  --font-sans: var(--font-manrope), "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Device-type tints (muted, legible on light surfaces) */
+  --device-speaker: #7363a0;
+  --device-speaker-soft: rgba(115, 99, 160, 0.1);
+  --device-camera: #566f8c;
+  --device-camera-soft: rgba(86, 111, 140, 0.1);
+  --device-thermostat: #b9764f;
+  --device-thermostat-soft: rgba(185, 118, 79, 0.1);
+  --device-light: #b39140;
+  --device-light-soft: rgba(179, 145, 64, 0.1);
+  --device-lock: #4e8570; /* success tone — "secured" */
+  --device-lock-soft: rgba(78, 133, 112, 0.1);
+  --device-doorbell: #a55f55;
+  --device-doorbell-soft: rgba(165, 95, 85, 0.1);
+}
+
+/* Dark mode — same slate-blue identity, AA-tuned for a warm-dark canvas. */
+[data-theme="dark"] {
+  --bg: #1a1d21;
+  --surface-0: #22262b;
+  --surface-1: #282d33;
+  --surface-2: #2f353c;
+  --surface-3: #3a4149;
+  --border: #363c44;
+  --border-strong: #4a525b;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-elevated: 0 20px 48px -8px rgba(0, 0, 0, 0.7);
+
+  --text: #e7e3db;
+  --text-secondary: #a7adb5;
+  --text-muted: #7c838c;
+
+  --accent: #8aa6c4;
+  --accent-hover: #9cb4ce;
+  --accent-on: #1a1d21;
+  --accent-soft: rgba(138, 166, 196, 0.18);
+  --accent-text: #a6bcd4;
+  --highlight: #d8997a;
+  --highlight-soft: rgba(216, 153, 122, 0.16);
+  --highlight-text: #e0ad90;
+  --success: #74a08a;
+  --success-soft: rgba(116, 160, 138, 0.16);
+  --success-text: #8db5a0;
+  --warning: #d3a25a;
+  --warning-soft: rgba(211, 162, 90, 0.16);
+  --warning-text: #dfb472;
+  --critical: #d37b72;
+  --critical-soft: rgba(211, 123, 114, 0.16);
+  --critical-text: #e0958c;
+  --info: #8aa6c4;
+  --info-soft: rgba(138, 166, 196, 0.14);
+
+  /* Device-type tints — brighter variants for the dark canvas */
+  --device-speaker: #b3a6cf;
+  --device-speaker-soft: rgba(179, 166, 207, 0.12);
+  --device-camera: #9db2c9;
+  --device-camera-soft: rgba(157, 178, 201, 0.12);
+  --device-thermostat: #d1a184;
+  --device-thermostat-soft: rgba(209, 161, 132, 0.12);
+  --device-light: #d0bb7e;
+  --device-light-soft: rgba(208, 187, 126, 0.12);
+  --device-lock: #86a895;
+  --device-lock-soft: rgba(134, 168, 149, 0.12);
+  --device-doorbell: #c99a92;
+  --device-doorbell-soft: rgba(201, 154, 146, 0.12);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface-0: var(--surface-0);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-on: var(--accent-on);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+  --color-highlight: var(--highlight);
+  --color-highlight-soft: var(--highlight-soft);
+  --color-highlight-text: var(--highlight-text);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-text: var(--success-text);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-text: var(--warning-text);
+  --color-critical: var(--critical);
+  --color-critical-soft: var(--critical-soft);
+  --color-critical-text: var(--critical-text);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-device-speaker: var(--device-speaker);
+  --color-device-speaker-soft: var(--device-speaker-soft);
+  --color-device-camera: var(--device-camera);
+  --color-device-camera-soft: var(--device-camera-soft);
+  --color-device-thermostat: var(--device-thermostat);
+  --color-device-thermostat-soft: var(--device-thermostat-soft);
+  --color-device-light: var(--device-light);
+  --color-device-light-soft: var(--device-light-soft);
+  --color-device-lock: var(--device-lock);
+  --color-device-lock-soft: var(--device-lock-soft);
+  --color-device-doorbell: var(--device-doorbell);
+  --color-device-doorbell-soft: var(--device-doorbell-soft);
+  --radius-sm: var(--radius-sm);
+  --radius: var(--radius);
+  --radius-lg: var(--radius-lg);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11";
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+/* All numeric readouts use tabular figures so live values never jitter */
+.tabular {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Typography roles — the single source of truth for the scale.
+ * Page/section headings stay in Manrope; anything numeric or technical
+ * (KPI values, axis ticks, timestamps, endpoint strings) uses Plex Mono. */
+.type-page {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+.type-section {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.type-body {
+  font-size: 13px;
+  line-height: 1.55;
+}
+.type-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.type-kpi {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.type-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.type-axis {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+/* Small-caps style label used above stat values and form fields */
+.overline {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Hairline card — subtle shadow, borders for structure */
+.panel {
+  background: var(--surface-0);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.panel-raised {
+  background: var(--surface-0);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+/* Form control base — shared by Input / Select / native controls */
+.field {
+  height: 2.25rem;
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-0);
+  padding: 0 0.75rem;
+  font-size: 13px;
+  color: var(--text);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.field::placeholder {
+  color: var(--text-muted);
+}
+.field:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+select.field {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) calc(50% - 1.5px), calc(100% - 10px) calc(50% - 1.5px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 2rem;
+}
+
+/* Thin custom scrollbars to keep dense tables calm */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.fade-in {
+  animation: fade-in-up 0.25s ease-out both;
+}
+
+.dialog-in {
+  animation: dialog-in 0.18s ease-out both;
+}
+
+.drawer-in {
+  animation: drawer-in 0.2s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
