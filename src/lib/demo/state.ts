@@ -13,11 +13,12 @@ import type { DeviceDto } from "@/lib/types";
  */
 
 const COOKIE = "et_demo";
-const MAX_CHARS = 3_600; // base64 budget, leaves headroom under the 4093 limit
+export const MAX_CHARS = 3_600; // base64 budget, leaves headroom under the 4093 limit
 
 const MAX_SPIKES = 12;
 const MAX_ALERTS = 12;
-const MAX_DEVICES = 8;
+/** Registered (non-seeded) devices allowed per session. */
+export const MAX_DEVICES = 8;
 
 /** A batch of synthetic readings, collapsed into one hour bucket. */
 export interface Spike {
@@ -37,7 +38,13 @@ export interface SessionAlert {
 }
 
 export interface DemoState {
-  v: 1;
+  v: 2;
+  /** true once the visitor finished first-run onboarding */
+  init: boolean;
+  /** true when the generated demo home (base devices + seeded alerts) applies */
+  seed: boolean;
+  /** ids of session devices that should carry generated history */
+  hi: number[];
   /** user overrides: alerting, threshold, name, email, address */
   u: { a: boolean; t: number; n: string; e: string; ad: string };
   /** devices registered during this session */
@@ -59,7 +66,10 @@ export interface DemoState {
 
 export function defaultState(): DemoState {
   return {
-    v: 1,
+    v: 2,
+    init: false,
+    seed: true,
+    hi: [],
     u: { a: true, t: 500, n: "Demo User", e: "demo@energytracker.dev", ad: "24 Maple Street" },
     d: [],
     ed: {},
@@ -81,7 +91,7 @@ function encode(state: DemoState): string {
 function decode(raw: string): DemoState | null {
   try {
     const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as DemoState;
-    if (parsed?.v !== 1 || typeof parsed.u !== "object" || parsed.u === null) return null;
+    if (parsed?.v !== 2 || typeof parsed.u !== "object" || parsed.u === null) return null;
     const base = defaultState();
     return {
       ...base,
@@ -92,6 +102,7 @@ function decode(raw: string): DemoState | null {
       s: Array.isArray(parsed.s) ? parsed.s : [],
       A: Array.isArray(parsed.A) ? parsed.A : [],
       d: Array.isArray(parsed.d) ? parsed.d : [],
+      hi: Array.isArray(parsed.hi) ? parsed.hi : [],
       br: parsed.br ?? base.br,
     };
   } catch {
@@ -99,27 +110,47 @@ function decode(raw: string): DemoState | null {
   }
 }
 
-/** Trim oldest entries until the encoded state fits the cookie budget. */
-function fit(state: DemoState): DemoState {
+/**
+ * Drop disposable telemetry (dispatched spikes and alerts) until the state
+ * fits the cookie. The profile and devices are durable — they are never
+ * silently dropped here, so an endpoint that grows them checks `stateFits`
+ * first and refuses with 409 when the session is full.
+ */
+function trimTelemetry(state: DemoState): DemoState {
   const out = { ...state };
   out.s = out.s.slice(-MAX_SPIKES);
   out.A = out.A.slice(-MAX_ALERTS);
-  out.d = out.d.slice(-MAX_DEVICES);
 
   let encoded = encode(out);
   while (encoded.length > MAX_CHARS && out.s.length > 0) {
     out.s = out.s.slice(1);
     encoded = encode(out);
   }
-  while (encoded.length > MAX_CHARS && out.A.length > 1) {
+  while (encoded.length > MAX_CHARS && out.A.length > 0) {
     out.A = out.A.slice(1);
     encoded = encode(out);
   }
+  return out;
+}
+
+function fit(state: DemoState): DemoState {
+  const out = trimTelemetry(state);
+  // Defensive backstop so we never emit a cookie the browser would silently
+  // drop (which would reset the whole session). Unreachable in normal use:
+  // device-adding endpoints gate on `stateFits` before writing.
+  let encoded = encode(out);
   while (encoded.length > MAX_CHARS && out.d.length > 1) {
     out.d = out.d.slice(1);
     encoded = encode(out);
   }
   return out;
+}
+
+/** True when the durable session (profile + devices + edits) fits the cookie
+ *  once disposable telemetry is trimmed. Endpoints that add devices MUST check
+ *  this before writing and answer 409 when it is false. */
+export function stateFits(state: DemoState): boolean {
+  return encode(trimTelemetry(state)).length <= MAX_CHARS;
 }
 
 export async function readState(): Promise<DemoState> {
@@ -139,4 +170,10 @@ export async function writeState(state: DemoState): Promise<void> {
     secure: process.env.NODE_ENV === "production",
     maxAge: 60 * 60 * 24 * 30,
   });
+}
+
+/** Forget the visitor's session entirely — the next load starts onboarding. */
+export async function clearState(): Promise<void> {
+  const store = await cookies();
+  store.delete(COOKIE);
 }

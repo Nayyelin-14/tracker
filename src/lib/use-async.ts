@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, isNetworkError } from "./api";
 
 export interface AsyncState<T> {
@@ -29,15 +29,22 @@ export interface AsyncState<T> {
 export function useAsync<T>(
   fn: () => Promise<T>,
   deps: readonly unknown[],
-  opts?: { enabled?: boolean },
+  opts?: { enabled?: boolean; refetchOnFocus?: boolean },
 ): AsyncState<T> {
   const enabled = opts?.enabled ?? true;
+  const refetchOnFocus = opts?.refetchOnFocus ?? true;
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [tick, setTick] = useState(0);
   const [settledTick, setSettledTick] = useState(-1);
 
   const reload = useCallback(() => setTick((t) => t + 1), []);
+
+  // Latest fetcher for the focus listener, so it never re-subscribes.
+  const fnRef = useRef(fn);
+  useEffect(() => {
+    fnRef.current = fn;
+  });
 
   useEffect(() => {
     if (!enabled) return;
@@ -69,6 +76,31 @@ export function useAsync<T>(
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick, enabled]);
+
+  // Cross-tab convergence: the session lives in a cookie shared by every tab of
+  // this browser, so when a tab regains focus after changes made elsewhere,
+  // refetch silently to catch up without flashing a skeleton or dropping the
+  // data already on screen on a transient failure.
+  useEffect(() => {
+    if (!enabled || !refetchOnFocus) return;
+    function refreshIfVisible() {
+      if (document.visibilityState !== "visible") return;
+      fnRef.current()
+        .then((result) => {
+          setData(result);
+          setError(null);
+        })
+        .catch(() => {
+          // keep the last good data — a background refresh must not blank the page
+        });
+    }
+    document.addEventListener("visibilitychange", refreshIfVisible);
+    window.addEventListener("focus", refreshIfVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+      window.removeEventListener("focus", refreshIfVisible);
+    };
+  }, [enabled, refetchOnFocus]);
 
   const inFlight = tick > settledTick;
 

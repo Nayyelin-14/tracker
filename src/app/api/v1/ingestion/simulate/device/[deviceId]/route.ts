@@ -1,8 +1,10 @@
 import type { NextRequest } from "next/server";
 import { badRequest, notFound, param, parseId } from "@/lib/demo/http";
 import { readState, writeState } from "@/lib/demo/state";
-import { hourTotal, resolveDevices } from "@/lib/demo/store";
+import { ALERT_MESSAGE, hourTotal, resolveDevices } from "@/lib/demo/store";
 import { hourFloor, round2 } from "@/lib/demo/util";
+import { DEMO_USER_ID } from "@/lib/demo/seed";
+import type { AlertDto } from "@/lib/types";
 
 type Ctx = { params: Promise<Record<string, string>> };
 
@@ -59,16 +61,30 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   // re-arm as soon as the aggregate comes back under. Alerting being muted
   // suppresses the notification but still tracks the crossing, so re-arming
   // mid-violation cannot produce a duplicate.
+  let raisedAlert: AlertDto | null = null;
   if (above && !wasAbove) {
     state.br = { h: curHour, t: threshold, v: true };
     if (state.u.a) {
+      const createdAt = new Date(now).toISOString();
       state.A.push({
         id: state.na,
         threshold,
         energyConsumed: aggregate,
-        createdAt: new Date(now).toISOString(),
+        createdAt,
         sent: true,
       });
+      // Shape the same DTO the alert ledger serves, so the dashboard can show
+      // the notification email the moment the crossing happens.
+      raisedAlert = {
+        id: state.na,
+        userId: DEMO_USER_ID,
+        message: ALERT_MESSAGE,
+        threshold,
+        energyConsumed: aggregate,
+        email: state.u.e,
+        sent: true,
+        createdAt,
+      };
       state.na += 1;
     }
   } else {
@@ -85,6 +101,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       mode,
       readingsSent: readings,
       totalEnergyKwh: totalSent,
+      alertRaised: raisedAlert != null,
+      alert: raisedAlert,
       message: PIPELINE_MESSAGE,
     },
     { status: 202 },

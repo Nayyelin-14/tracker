@@ -58,6 +58,33 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const getDemoUser = () => request<UserDto>("/user/demo");
 
+export interface OnboardingDeviceInput {
+  name: string;
+  type: DeviceType;
+  location: string;
+}
+
+export interface OnboardingInput {
+  mode: "generate" | "custom";
+  name?: string;
+  email?: string;
+  address?: string;
+  energyAlertingThreshold?: number;
+  alerting?: boolean;
+  history?: boolean;
+  devices?: OnboardingDeviceInput[];
+}
+
+/** Provision the demo session (first run). Returns the created account. */
+export const initializeDemo = (input: OnboardingInput) =>
+  request<UserDto>("/user/demo", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
+/** Forget the session — the next load returns to first-run onboarding. */
+export const resetDemo = () => request<void>("/user/demo", { method: "DELETE" });
+
 export const getUser = (userId: number) => request<UserDto>(`/user/${userId}`);
 
 export interface UpdateUserInput {

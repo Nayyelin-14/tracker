@@ -9,7 +9,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { ApiError, getDemoUser, isNetworkError } from "@/lib/api";
+import {
+  ApiError,
+  getDemoUser,
+  initializeDemo,
+  isNetworkError,
+  resetDemo,
+  type OnboardingInput,
+} from "@/lib/api";
 import type { UserDto } from "@/lib/types";
 
 export type SessionStatus = "loading" | "ready" | "missing" | "offline";
@@ -20,6 +27,11 @@ interface SessionContextValue {
   error: string | null;
   refresh: () => void;
   patchUser: (user: UserDto) => void;
+  /** Provision the session during first-run onboarding. Throws on failure so
+   *  the onboarding form can show a field-level error without leaving the gate. */
+  initialize: (input: OnboardingInput) => Promise<void>;
+  /** Forget the session and return to first-run onboarding. */
+  reset: () => Promise<void>;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -78,9 +90,24 @@ export function DemoSessionProvider({ children }: { children: ReactNode }) {
 
   const patchUser = useCallback((next: UserDto) => setUser(next), []);
 
+  const initialize = useCallback(
+    async (input: OnboardingInput) => {
+      const demo = await initializeDemo(input);
+      applySuccess(demo);
+    },
+    [applySuccess],
+  );
+
+  const reset = useCallback(async () => {
+    await resetDemo();
+    setUser(null);
+    setStatus("missing");
+    setError(null);
+  }, []);
+
   const value = useMemo(
-    () => ({ user, status, error, refresh, patchUser }),
-    [user, status, error, refresh, patchUser],
+    () => ({ user, status, error, refresh, patchUser, initialize, reset }),
+    [user, status, error, refresh, patchUser, initialize, reset],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

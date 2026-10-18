@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { badRequest, problem, readJson } from "@/lib/demo/http";
 import { validateDevice, type DeviceBody } from "@/lib/demo/device-input";
 import { DEMO_USER_ID } from "@/lib/demo/seed";
-import { readState, writeState } from "@/lib/demo/state";
+import { MAX_DEVICES, readState, stateFits, writeState } from "@/lib/demo/state";
 import type { DeviceDto } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
@@ -21,8 +21,12 @@ export async function POST(req: NextRequest) {
   }
 
   const state = await readState();
-  if (state.d.length >= 8) {
-    return problem(409, "Device limit reached", "The demo session allows up to 8 registered devices");
+  if (state.d.length >= MAX_DEVICES) {
+    return problem(
+      409,
+      "Device limit reached",
+      `The demo session allows up to ${MAX_DEVICES} registered devices`,
+    );
   }
 
   const now = new Date().toISOString();
@@ -37,6 +41,15 @@ export async function POST(req: NextRequest) {
   };
   state.nd += 1;
   state.d.push(device);
+
+  if (!stateFits(state)) {
+    return problem(
+      413,
+      "Session storage full",
+      "This demo stores your session in a browser cookie. Delete a device or use shorter names and try again.",
+    );
+  }
+
   await writeState(state);
 
   return Response.json(device, { status: 201 });

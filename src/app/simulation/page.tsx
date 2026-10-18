@@ -20,7 +20,8 @@ import { getDevicesByUser, simulateDevice, updateUser } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
 import { deviceMeta } from "@/lib/device-meta";
 import { kwh } from "@/lib/format";
-import type { DeviceDto } from "@/lib/types";
+import { AlertEmailPreview, AlertToast } from "@/components/alert-notification";
+import type { AlertDto, DeviceDto } from "@/lib/types";
 
 interface PipelineEntry {
   id: number;
@@ -49,6 +50,8 @@ export default function SimulationPage() {
   const [dispatching, setDispatching] = useState<"normal" | "high" | null>(null);
   const [dispatchError, setDispatchError] = useState<string | null>(null);
   const [log, setLog] = useState<PipelineEntry[]>([]);
+  const [alertToast, setAlertToast] = useState<AlertDto | null>(null);
+  const [alertPreview, setAlertPreview] = useState<AlertDto | null>(null);
 
   if (status === "loading") return <SimulationSkeleton />;
 
@@ -113,6 +116,7 @@ export default function SimulationPage() {
     setLog((prev) => [entry, ...prev].slice(0, 12));
     try {
       const res = await simulateDevice(selected.deviceId, mode);
+      if (res.alert) setAlertToast(res.alert);
       setLog((prev) =>
         prev.map((l) =>
           l.id === entry.id
@@ -366,6 +370,20 @@ export default function SimulationPage() {
           {devices.refreshing ? "Syncing…" : "Sync state"}
         </Button>
       </Card>
+
+      {alertToast && (
+        <AlertToast
+          alert={alertToast}
+          onView={() => {
+            setAlertPreview(alertToast);
+            setAlertToast(null);
+          }}
+          onClose={() => setAlertToast(null)}
+        />
+      )}
+      {alertPreview && (
+        <AlertEmailPreview alert={alertPreview} onClose={() => setAlertPreview(null)} />
+      )}
     </>
   );
 }

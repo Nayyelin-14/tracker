@@ -142,4 +142,7 @@ export interface SimulateResponse {
   readingsSent?: number;
   totalEnergyKwh?: number;
   message?: string;
+  /** Demo extension: set when this dispatch crossed the threshold on the way up. */
+  alertRaised?: boolean;
+  alert?: AlertDto | null;
 }

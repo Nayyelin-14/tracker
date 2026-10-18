@@ -11,6 +11,7 @@ import {
   Menu,
   MagicWand,
   NavArrowLeft,
+  Refresh,
   X,
 } from "iconoir-react";
 import { clsx } from "clsx";
@@ -157,6 +158,50 @@ function UserProfile({ collapsed = false }: { collapsed?: boolean }) {
   );
 }
 
+function ResetSession({ collapsed }: { collapsed: boolean }) {
+  const { status, reset } = useSession();
+  const [busy, setBusy] = useState(false);
+
+  async function onClick() {
+    if (status !== "ready" || busy) return;
+    const ok = window.confirm(
+      "Reset this demo session?\n\nYour account, devices and alerts live only in this browser and will be cleared. You can set it all up again from scratch.",
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await reset();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy || status !== "ready"}
+      title={collapsed ? "Reset demo session" : undefined}
+      className={clsx(
+        "mt-2 flex w-full items-center rounded-[10px] py-1.5 text-[12px] font-medium text-text-muted transition-colors",
+        "hover:bg-surface-2 hover:text-text disabled:opacity-50",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+        collapsed ? "justify-center px-0" : "gap-2 px-3",
+      )}
+    >
+      <Refresh width={14} height={14} className="shrink-0" />
+      <span
+        className={clsx(
+          "whitespace-nowrap transition-all duration-200 ease-out",
+          collapsed ? "ml-0 max-w-0 overflow-hidden opacity-0" : "max-w-[160px] opacity-100",
+        )}
+      >
+        {busy ? "Resetting…" : "Reset demo"}
+      </span>
+    </button>
+  );
+}
+
 function NavLinks({
   pathname,
   onNavigate,
@@ -245,6 +290,7 @@ function SidebarContent({
           </div>
         </div>
         <UserProfile collapsed={collapsed} />
+        <ResetSession collapsed={collapsed} />
       </div>
     </>
   );

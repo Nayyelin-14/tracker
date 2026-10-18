@@ -32,11 +32,14 @@ export function resolveUser(state: DemoState): UserDto {
 
 /** Seeded devices (with session edits) plus devices registered this session. */
 export function resolveDevices(state: DemoState): DeviceDto[] {
+  if (!state.init) return [];
   const deleted = new Set(state.xd);
   const out: DeviceDto[] = [];
-  for (const base of BASE_DEVICES) {
-    if (deleted.has(base.deviceId)) continue;
-    out.push(state.ed[String(base.deviceId)] ?? base);
+  if (state.seed) {
+    for (const base of BASE_DEVICES) {
+      if (deleted.has(base.deviceId)) continue;
+      out.push(state.ed[String(base.deviceId)] ?? base);
+    }
   }
   for (const dev of state.d) {
     if (deleted.has(dev.deviceId)) continue;
@@ -60,7 +63,9 @@ function deviceHourly(
   now: number,
 ): Map<number, number> {
   const map = new Map<number, number>();
-  const seeded = SEEDED_IDS.has(dev.deviceId);
+  // Base devices carry generated history when the demo home is in play; custom
+  // onboarding devices carry it only when the visitor opted into history.
+  const seeded = (state.seed && SEEDED_IDS.has(dev.deviceId)) || state.hi.includes(dev.deviceId);
 
   if (seeded) {
     const from = Math.max(start, seededRange(SEED_DAYS, now).start);
@@ -231,6 +236,8 @@ export const ALERT_MESSAGE = "Energy consumption threshold exceeded";
 
 /** Seeded history plus anything this visitor's spikes raised, newest first. */
 export function alerts(state: DemoState, limit?: number, now = Date.now()): AlertDto[] {
+  if (!state.init) return [];
+
   const session: AlertDto[] = state.A.map((a) => ({
     id: a.id,
     userId: BASE_USER.userId,
@@ -243,7 +250,7 @@ export function alerts(state: DemoState, limit?: number, now = Date.now()): Aler
   }));
 
   const merged = [
-    ...seededAlerts(now).map<AlertDto>((a) => ({ ...a })),
+    ...(state.seed ? seededAlerts(now).map<AlertDto>((a) => ({ ...a })) : []),
     ...session,
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 

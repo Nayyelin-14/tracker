@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { DemoSessionProvider } from "@/components/session";
+import { SessionGate } from "@/components/session-gate";
 
 // Two families only: Manrope for UI, IBM Plex Mono for data and technical text.
 const manrope = Manrope({
@@ -43,7 +44,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="min-h-full" suppressHydrationWarning>
         <DemoSessionProvider>
-          <AppShell>{children}</AppShell>
+          <SessionGate>
+            <AppShell>{children}</AppShell>
+          </SessionGate>
         </DemoSessionProvider>
         <Analytics />
       </body>

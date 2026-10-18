@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
-import { badRequest, notFound, param, parseId, readJson } from "@/lib/demo/http";
+import { badRequest, notFound, param, parseId, problem, readJson } from "@/lib/demo/http";
 import { validateDevice, type DeviceBody } from "@/lib/demo/device-input";
-import { readState, writeState } from "@/lib/demo/state";
+import { readState, stateFits, writeState } from "@/lib/demo/state";
 import { resolveDevices } from "@/lib/demo/store";
 import type { DeviceDto } from "@/lib/types";
 
@@ -43,6 +43,15 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
   } else {
     state.ed[String(id)] = updated;
   }
+
+  if (!stateFits(state)) {
+    return problem(
+      413,
+      "Session storage full",
+      "This demo stores your session in a browser cookie. Use a shorter name/location and try again.",
+    );
+  }
+
   await writeState(state);
 
   return Response.json(updated);

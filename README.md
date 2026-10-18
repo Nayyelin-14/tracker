@@ -3,8 +3,7 @@
 A self-contained, zero-infrastructure demo of the Energy Tracker product,
 deployable to Vercel on the free tier.
 
-**Live demo:** _add your Vercel URL here after the first deploy — e.g._
-`https://energy-tracker-demo.vercel.app`
+**Live demo:** https://tracker-chi-swart.vercel.app
 
 ---
 
@@ -41,19 +40,26 @@ It is a separate, independent repository and is left untouched by this demo.
 
 ## Features to try
 
-Everything below works in the live demo with no setup.
+Everything below works in the live demo — no accounts, no keys, no cost.
+
+**First run — onboarding.** Nothing exists until you choose how to start. On
+your first visit a gate offers two paths: **Generate a demo home** (one click —
+three devices, a week of history, a 500 kWh limit and two past alerts) or
+**Set up my own** (your name, email, address, threshold, alerting and your own
+devices, with an option to include a week of history). The choice is stored per
+visitor in a session cookie, so the demo starts empty and becomes yours.
 
 | Page | What you can do |
 |---|---|
-| **`/`** Overview | See 7 days of hourly consumption for 3 seeded devices, a per-device breakdown, the coverage meter, recent alerts, and the threshold status toggle. Switch the chart between hourly and daily buckets. |
-| **`/devices`** | Register, rename, re-type, relocate and delete demo devices. Seeded devices can be edited; new ones get the next id in the 1001–1003 sequence. Validation errors are surfaced per field. |
-| **`/simulation`** | Dispatch a batch of synthetic readings to any device. `normal` adds a small amount to the current hour; `high` pushes the hour past the 500 kWh threshold and raises a real alert you can then see on `/alerts`. Change the threshold first to watch edge-triggered alerting re-arm. |
+| **`/`** Overview | See 7 days of hourly consumption for your devices, a per-device breakdown, the coverage meter, recent alerts, and the threshold status toggle. Switch the chart between hourly and daily buckets. |
+| **`/devices`** | Register, rename, re-type, relocate and delete devices. Generated devices can be edited; new ones get the next id in sequence. Validation errors are surfaced per field. |
+| **`/simulation`** | Dispatch a batch of synthetic readings to any device. `normal` adds a small amount to the current hour; `high` pushes the hour past the threshold and raises a real alert — a toast appears and you can **open the exact email** that would have been sent. Change the threshold first to watch edge-triggered alerting re-arm. |
 | **`/alerts`** | Audit ledger of every threshold crossing, newest first, with the energy consumed against the limit that was in force at the time. |
 | **`/insights`** | Pick a provider/model, then generate saving tips. The **stream** path delivers the text token-by-token over Server-Sent Events; the one-shot path returns the full JSON payload. An overview insight summarises the window. |
 
-The default account is `demo@energytracker.dev` with alerting **armed** at
-**500 kWh/bucket**, so the out-of-the-box flow is: open the overview, go to
-Simulation, dispatch a `high` batch, then check Alerts.
+If you take the generated path, the account is `demo@energytracker.dev` with
+alerting **armed** at **500 kWh/bucket**, so the flow is: open the overview, go
+to Simulation, dispatch a `high` batch, open the alert email, then check Alerts.
 
 ---
 
@@ -124,6 +130,9 @@ src/
 │       ├── insight/             #   providers, saving tips, SSE stream
 │       └── ingestion/           #   simulate a reading batch
 ├── components/                  # dashboard widgets, shell, design system
+│   ├── onboarding.tsx           #   first-run gate (generate or custom)
+│   ├── session-gate.tsx         #   boot / onboarding / offline / ready
+│   └── alert-notification.tsx   #   alert toast + email preview
 └── lib/
     ├── api.ts                   # single fetch client used by every page
     ├── types.ts                 # DTO contracts shared by UI + handlers
@@ -152,15 +161,58 @@ hash-derived ±1 kWh jitter so the chart has texture. Any visitor, any
 serverless instance, any cold start: same numbers.
 
 **2. Session cookie.** Seed data is stateless, but a visitor can change things.
-Mutations — threshold edits, device CRUD, dispatched spikes, the alerts those
-spikes raise — are packed into a base64url cookie (`et_demo`, ~3.6 KB budget,
-30-day lifetime) that rides on the request. That is what makes the demo work on
-stateless serverless functions, and why nothing one visitor does is visible to
-another.
+Mutations — the onboarding choice, threshold edits, device CRUD, dispatched
+spikes, the alerts those spikes raise — are packed into a base64url cookie
+(`et_demo`, ~3.6 KB budget, 30-day lifetime) that rides on the request. That is
+what makes the demo work on stateless serverless functions, and why nothing one
+visitor does is visible to another.
+
+**3. First-run onboarding.** There is no session until the visitor completes the
+gate. `GET /api/v1/user/demo` returns `404` before that, which the client turns
+into the onboarding screen; `POST /api/v1/user/demo` provisions the session
+(`mode: "generate"` for the demo home, `mode: "custom"` for the visitor's own
+account and devices).
 
 Alerting is **edge-triggered**, exactly like the real system: a notification
 fires only on a below→above crossing, stays quiet while the aggregate remains
-high, and re-arms when it drops back under or the threshold changes.
+high, and re-arms when it drops back under or the threshold changes. When a
+crossing happens the demo raises a toast and lets you **open the exact email**
+that would have been sent — the same message Mailpit receives in the full stack
+(there is no mail server here, so nothing leaves the browser).
+
+---
+
+## What happens to your data
+
+This is the most important thing to understand about the demo: **the server
+stores nothing.** Whatever you set up — account, threshold, devices, alerts —
+lives only in a cookie (`et_demo`) in *your* browser, for up to 30 days.
+
+- **Nobody else can see it.** Two people using the demo at the same time — or
+  the same person on two devices — have completely independent sessions. There
+  is no shared database, no user list, no server-side state to collide with.
+- **Close the tab and come back** in the same browser within 30 days and
+  everything is still there.
+- **Clear cookies, use a private window, or switch browser/device** and the
+  session is gone; you start from onboarding again.
+- **`Reset demo`** in the sidebar wipes the session deliberately.
+- The "generate" path is [deterministic](#how-the-simulation-works), so every
+  visitor sees the same starting numbers — that is public demo data, not a leak.
+
+Two tabs of the *same* browser share one cookie, so a page left open in the
+background refreshes itself the moment you focus it again, keeping both tabs in
+sync with whatever changed last.
+
+### Limits (so the cookie never overflows)
+
+Everything must fit in ~4 KB, so the demo is bounded rather than silently
+losing data:
+
+- Up to **8 devices** you register yourself (the generated home adds 3 more).
+- Field caps: name 60 chars, email 120, address 100, device name/location 80.
+- Dispatched spikes and alerts are trimmed oldest-first as telemetry.
+- If a change genuinely would not fit, the API answers **`413 Session storage
+  full`** and keeps your existing data — it never drops devices to make room.
 
 ---
 
@@ -170,7 +222,9 @@ Every path below is implemented in this repo. Nothing proxies out.
 
 | Method | Path |
 |---|---|
-| `GET` | `/api/v1/user/demo` |
+| `GET` | `/api/v1/user/demo` *(404 until onboarded)* |
+| `POST` | `/api/v1/user/demo` *(onboarding: `generate` \| `custom`)* |
+| `DELETE` | `/api/v1/user/demo` *(forget this session)* |
 | `GET` `PUT` | `/api/v1/user/:id` |
 | `GET` | `/api/v1/device/user/:userId` |
 | `POST` | `/api/v1/device/create` |

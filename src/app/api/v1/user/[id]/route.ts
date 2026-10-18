@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
-import { badRequest, notFound, param, parseId, readJson } from "@/lib/demo/http";
+import { badRequest, notFound, param, parseId, problem, readJson } from "@/lib/demo/http";
 import { DEMO_USER_ID } from "@/lib/demo/seed";
-import { readState, writeState } from "@/lib/demo/state";
+import { readState, stateFits, writeState } from "@/lib/demo/state";
+import { validateProfile } from "@/lib/demo/profile-input";
 import { resolveUser } from "@/lib/demo/store";
 import type { UserDto } from "@/lib/types";
 
@@ -11,6 +12,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   const id = parseId(await param(ctx, "id"));
   if (id !== DEMO_USER_ID) return notFound(`No user with id ${id}`);
   const state = await readState();
+  if (!state.init) return notFound("No demo user is provisioned for this session.");
   return Response.json(resolveUser(state));
 }
 
@@ -25,6 +27,9 @@ interface UpdateUserBody {
 export async function PUT(req: NextRequest, ctx: Ctx) {
   const id = parseId(await param(ctx, "id"));
   if (id !== DEMO_USER_ID) return notFound(`No user with id ${id}`);
+
+  const existing = await readState();
+  if (!existing.init) return notFound("No demo user is provisioned for this session.");
 
   const parsed = await readJson<UpdateUserBody>(req);
   if ("error" in parsed) return parsed.error;
@@ -45,12 +50,9 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
   if (body.alerting !== undefined && typeof body.alerting !== "boolean") {
     errors.alerting = "Alerting must be true or false";
   }
-  if (typeof body.name === "string" && body.name.trim() === "") {
-    errors.name = "Name cannot be empty";
-  }
-  if (typeof body.email === "string" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
-    errors.email = "Invalid email format";
-  }
+
+  const profile = validateProfile(body);
+  Object.assign(errors, profile.errors);
 
   if (Object.keys(errors).length > 0) {
     return badRequest("Validation failed", errors);
@@ -64,9 +66,18 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
     state.br = { h: 0, t: state.u.t, v: false };
   }
   if (typeof body.alerting === "boolean") state.u.a = body.alerting;
-  if (typeof body.name === "string") state.u.n = body.name.trim();
-  if (typeof body.email === "string") state.u.e = body.email.trim();
-  if (typeof body.address === "string") state.u.ad = body.address.trim();
+  if (profile.values.name !== undefined) state.u.n = profile.values.name;
+  if (profile.values.email !== undefined) state.u.e = profile.values.email;
+  if (profile.values.address !== undefined) state.u.ad = profile.values.address;
+
+  if (!stateFits(state)) {
+    return problem(
+      413,
+      "Session storage full",
+      "This demo stores your session in a browser cookie. Use a shorter value and try again.",
+    );
+  }
+
   await writeState(state);
 
   const user: UserDto = resolveUser(state);
