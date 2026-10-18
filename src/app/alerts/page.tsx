@@ -1,7 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BellOff, Refresh, ShieldCheck, WarningTriangle as TriangleAlert, WifiOff } from "iconoir-react";
+import {
+  BellOff,
+  CheckCircle,
+  Mail,
+  Refresh,
+  WarningTriangle as TriangleAlert,
+  WifiOff,
+} from "iconoir-react";
 import { clsx } from "clsx";
 import { PageHeader } from "@/components/page-header";
 import { useSession } from "@/components/session";
@@ -49,179 +56,239 @@ export default function AlertsPage() {
           icon={<WifiOff width={22} height={22} />}
           title={status === "missing" ? "Demo session not initialized" : "Demo backend unreachable"}
           description={error ?? "The request to the Next.js API layer failed. Retry in a moment."}
-          actions={<Button variant="primary" onClick={() => void refresh()}>Retry</Button>}
+          actions={
+            <Button variant="primary" onClick={() => void refresh()}>
+              Retry
+            </Button>
+          }
         />
       </>
     );
   }
 
+  const total = alerts.data?.length ?? 0;
   const violationCount = (alerts.data ?? []).filter((a) => a.energyConsumed > a.threshold).length;
   const unsentCount = (alerts.data ?? []).filter((a) => !a.sent).length;
 
   return (
     <>
       <PageHeader
-        overline="Alerts"
-        title="Incident ledger"
-        description="Chronological record of threshold evaluations"
+        title="Alerts"
+        description="Review home threshold violations and system notifications."
         actions={
-          <>
-            <SegmentedControl
-              value={filter}
-              onChange={setFilter}
-              options={[
-                { value: "all", label: `All (${alerts.data?.length ?? 0})` },
-                { value: "violations", label: `Violations (${violationCount})` },
-                { value: "unsent", label: `Unsent (${unsentCount})` },
-              ]}
+          <Button size="sm" onClick={alerts.reload} disabled={alerts.refreshing}>
+            <Refresh
+              width={13}
+              height={13}
+              className={alerts.refreshing ? "animate-spin" : undefined}
             />
-            <Button size="sm" onClick={alerts.reload} disabled={alerts.refreshing}>
-              <Refresh
-                width={13}
-                height={13}
-                className={alerts.refreshing ? "animate-spin" : undefined}
-              />
-              {alerts.refreshing ? "Refreshing…" : "Refresh"}
-            </Button>
-          </>
+            {alerts.refreshing ? "Refreshing…" : "Refresh"}
+          </Button>
         }
       />
 
-      {/* Summary strip */}
-      <div
-        className={`mb-5 grid grid-cols-1 gap-3 transition-opacity sm:grid-cols-3 ${
-          alerts.refreshing ? "opacity-40" : ""
-        }`}
-      >
-        <SummaryCard
-          label="Total events"
-          value={String(alerts.data?.length ?? 0)}
-          icon={<TriangleAlert width={13} height={13} className="text-text-muted" />}
-        />
-        <SummaryCard
+      {/* Severity summary — one panel, three readouts divided by hairlines */}
+      <Card className="mb-5 grid grid-cols-1 divide-y divide-border p-0 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <SummaryCell
+          icon={TriangleAlert}
+          tone="critical"
           label="Threshold breaches"
-          value={String(violationCount)}
-          tone={violationCount > 0 ? "critical" : "neutral"}
-          icon={<TriangleAlert width={13} height={13} />}
+          value={violationCount}
+          hint="Load crossed your limit"
         />
-        <SummaryCard
-          label="Emails pending"
-          value={String(unsentCount)}
+        <SummaryCell
+          icon={Mail}
           tone={unsentCount > 0 ? "warning" : "neutral"}
-          icon={<ShieldCheck width={13} height={13} />}
+          label="Emails pending"
+          value={unsentCount}
+          hint={unsentCount > 0 ? "Awaiting delivery" : "All notifications delivered"}
         />
-      </div>
+        <SummaryCell
+          icon={CheckCircle}
+          tone="neutral"
+          label="Total events"
+          value={total}
+          hint="Across the full ledger"
+        />
+      </Card>
 
       {alerts.error && (
         <div className="mb-4">
           <AlertBanner
             title="Alert service unreachable"
             description={`GET /alert/user/${user.userId} failed (${alerts.error.status}). The ledger may be stale.`}
-            action={<Button size="sm" onClick={alerts.reload}>Retry</Button>}
+            action={
+              <Button size="sm" onClick={alerts.reload}>
+                Retry
+              </Button>
+            }
           />
         </div>
       )}
 
-      {alerts.loading || alerts.refreshing ? (
-        <div className="flex flex-col gap-2">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 w-full" />
-          ))}
+      <Card className="p-0">
+        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="type-section text-text">Incident history</h2>
+            <p className="mt-0.5 text-[12px] text-text-secondary">
+              Every threshold evaluation, newest first.
+            </p>
+          </div>
+          <SegmentedControl
+            value={filter}
+            onChange={setFilter}
+            options={[
+              { value: "all", label: `All ${total}` },
+              { value: "violations", label: `Violations ${violationCount}` },
+              { value: "unsent", label: `Unsent ${unsentCount}` },
+            ]}
+          />
         </div>
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          icon={<BellOff width={22} height={22} />}
-          title={filter === "all" ? "No alerts recorded" : "Nothing matches this filter"}
-          description={
-            filter === "all"
-              ? "The alerting service emits an event whenever aggregate load crosses your threshold. Dispatch a high-spike simulation to see one land here."
-              : "Switch filters or dispatch new telemetry to generate events."
-          }
-        />
-      ) : (
-        <Card className="p-0">
-          <ul className="divide-y divide-border">
-            {filtered.map((a) => (
-              <AlertLedgerRow key={a.id} alert={a} />
-            ))}
-          </ul>
-        </Card>
-      )}
+
+        {alerts.loading || alerts.refreshing ? (
+          <div className="p-4">
+            <div className="flex flex-col gap-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          </div>
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            icon={<BellOff width={22} height={22} />}
+            title={filter === "all" ? "No alerts recorded" : "Nothing matches this filter"}
+            description={
+              filter === "all"
+                ? "The alerting service emits an event whenever aggregate load crosses your threshold. Dispatch a high-spike simulation to see one land here."
+                : "Switch filters or dispatch new telemetry to generate events."
+            }
+            className="border-0 shadow-none"
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-border bg-surface-1">
+                  {["Time", "Event", "Measured", "Threshold", "Email"].map((h, i) => (
+                    <th
+                      key={h}
+                      className={clsx(
+                        "px-4 py-2.5 text-[12px] font-medium text-text-muted",
+                        (i === 2 || i === 3) && "text-right",
+                      )}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((a) => (
+                  <AlertRow key={a.id} alert={a} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </>
   );
 }
 
-function AlertLedgerRow({ alert }: { alert: AlertDto }) {
-  const over = alert.energyConsumed > alert.threshold;
-  return (
-    <li className="flex flex-col gap-2 px-4 py-3.5 transition-colors hover:bg-surface-1 sm:flex-row sm:items-center sm:gap-4">
-      <span
-        className={clsx(
-          "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border",
-          over
-            ? "border-critical/28 bg-critical-soft text-critical-text"
-            : "border-warning/28 bg-warning-soft text-warning-text",
-        )}
-      >
-        <TriangleAlert width={14} height={14} />
-      </span>
-
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={clsx("text-[13px] font-semibold", over ? "text-critical-text" : "text-warning-text")}>
-            {over ? "Threshold violation" : "Threshold event"}
-          </span>
-          <Badge tone={over ? "critical" : "warning"}>
-            {kwh(alert.energyConsumed, 2)} / {kwh(alert.threshold, 2)} kWh
-          </Badge>
-          <Badge tone={alert.sent ? "accent" : "neutral"}>
-            {alert.sent ? "email sent" : "unsent"}
-          </Badge>
-        </div>
-        <p className="mt-1 truncate text-[12.5px] text-text-secondary">{alert.message}</p>
-        <div className="mt-0.5 font-mono text-[10.5px] text-text-muted">
-          #{alert.id} · {alert.email}
-        </div>
-      </div>
-
-      <div className="shrink-0 text-right">
-        <div className="font-mono text-[11px] tabular text-text-secondary" title={compactDateTime(alert.createdAt)}>
-          {relativeTime(alert.createdAt)}
-        </div>
-        <div className="font-mono text-[10px] text-text-muted">{compactDateTime(alert.createdAt)}</div>
-      </div>
-    </li>
-  );
-}
-
-function SummaryCard({
+function SummaryCell({
+  icon: Icon,
+  tone,
   label,
   value,
-  tone = "neutral",
-  icon,
+  hint,
 }: {
+  icon: React.ComponentType<{ width?: number; height?: number }>;
+  tone: "critical" | "warning" | "neutral";
   label: string;
-  value: string;
-  tone?: "neutral" | "critical" | "warning";
-  icon: React.ReactNode;
+  value: number;
+  hint: string;
 }) {
+  const iconClass = {
+    critical: "bg-critical-soft text-critical-text",
+    warning: "bg-warning-soft text-warning-text",
+    neutral: "bg-surface-2 text-text-secondary",
+  }[tone];
+  const valueClass =
+    tone === "critical" && value > 0 ? "text-critical-text" : "text-text";
+
   return (
-    <Card raised className="flex items-center justify-between px-4 py-3.5">
-      <div>
-        <div className="overline">{label}</div>
+    <div className="flex items-start gap-3.5 px-5 py-4">
+      <span
+        className={clsx(
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)]",
+          iconClass,
+        )}
+      >
+        <Icon width={17} height={17} />
+      </span>
+      <div className="min-w-0">
         <div
           className={clsx(
-            "mt-1 font-mono text-[22px] font-semibold leading-none tabular",
-            tone === "critical" && "text-critical-text",
-            tone === "warning" && "text-warning-text",
-            tone === "neutral" && "text-text",
+            "text-[24px] font-semibold leading-none tabular tracking-tight",
+            valueClass,
           )}
         >
           {value}
         </div>
+        <div className="mt-1.5 text-[12.5px] font-medium text-text">{label}</div>
+        <div className="text-[11px] text-text-muted">{hint}</div>
       </div>
-      <span className="text-text-muted">{icon}</span>
-    </Card>
+    </div>
+  );
+}
+
+function AlertRow({ alert }: { alert: AlertDto }) {
+  const over = alert.energyConsumed > alert.threshold;
+  return (
+    <tr className="border-b border-border last:border-b-0 hover:bg-surface-1">
+      <td className="px-4 py-3">
+        <div className="font-mono text-[12px] text-text-secondary">
+          {compactDateTime(alert.createdAt)}
+        </div>
+        <div className="text-[10.5px] text-text-muted">{relativeTime(alert.createdAt)}</div>
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span
+            className={clsx(
+              "h-1.5 w-1.5 shrink-0 rounded-full",
+              over ? "bg-critical" : "bg-warning",
+            )}
+          />
+          <span
+            className={clsx(
+              "text-[12.5px] font-semibold",
+              over ? "text-critical-text" : "text-warning-text",
+            )}
+          >
+            {over ? "Threshold violation" : "Threshold event"}
+          </span>
+        </div>
+        <div className="mt-0.5 max-w-[360px] truncate text-[11.5px] text-text-muted">
+          {alert.message}
+        </div>
+      </td>
+      <td className="px-4 py-3 text-right text-[12.5px] font-semibold tabular">
+        <span className={over ? "text-critical-text" : "text-text"}>
+          {kwh(alert.energyConsumed, 2)}
+        </span>
+        <span className="ml-1 font-normal text-text-muted">kWh</span>
+      </td>
+      <td className="px-4 py-3 text-right text-[12.5px] tabular text-text-secondary">
+        {kwh(alert.threshold, 2)}
+        <span className="ml-1 font-normal text-text-muted">kWh</span>
+      </td>
+      <td className="px-4 py-3">
+        <Badge tone={alert.sent ? "success" : "neutral"} dot={alert.sent}>
+          {alert.sent ? "Sent" : "Unsent"}
+        </Badge>
+      </td>
+    </tr>
   );
 }
 
@@ -232,16 +299,8 @@ function AlertsSkeleton() {
         <Skeleton className="h-8 w-28" />
         <Skeleton className="mt-2 h-4 w-60" />
       </div>
-      <div className="mb-5 grid grid-cols-3 gap-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-20" />
-        ))}
-      </div>
-      <div className="flex flex-col gap-2">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-20" />
-        ))}
-      </div>
+      <Skeleton className="mb-5 h-[86px] w-full" />
+      <Skeleton className="h-80 w-full" />
     </>
   );
 }

@@ -1,331 +1,284 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Check,
-  MagicWand,
-  NavArrowLeft,
-  Plus,
-  Trash,
-  User,
-} from "iconoir-react";
+import { Bell, Calendar, Cpu, GraphUp, MagicWand, NavArrowRight, User } from "iconoir-react";
 import { clsx } from "clsx";
-import { AlertBanner, Button, Input, Select, Switch } from "@/components/ui";
+import { AlertBanner, Button } from "@/components/ui";
 import { useSession } from "@/components/session";
 import { BrandMark } from "@/components/brand-mark";
-import { DEVICE_TYPES, type DeviceType } from "@/lib/types";
+import { getAlerts, getCoverage, getDevicesByUser, getUsage } from "@/lib/api";
+import { deviceMeta } from "@/lib/device-meta";
+import { kwh } from "@/lib/format";
+import type { DeviceDto, UserDto } from "@/lib/types";
 
-interface DeviceRow {
-  name: string;
-  type: DeviceType;
-  location: string;
+interface CreatedSummary {
+  demo: UserDto;
+  devices: DeviceDto[];
+  totalKwh: number;
+  daysWithData: number;
+  maxDays: number;
+  alertCount: number;
+  violations: number;
 }
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 /**
- * First-run gate. Nothing exists until the visitor chooses how to start: a
- * one-click generated demo home, or their own account and devices. Rendered
- * full-screen by SessionGate while the session status is "missing".
+ * First-run gate. The visitor starts a ready-made demo home in one click; we
+ * then show exactly what was created (account, devices, history, limit and
+ * alerts) before opening the app. Rendered full-screen by SessionGate while
+ * the session status is "missing".
  */
 export function Onboarding() {
-  const { initialize } = useSession();
-  const [view, setView] = useState<"choose" | "custom">("choose");
+  const { initialize, enter } = useSession();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [address, setAddress] = useState("");
-  const [threshold, setThreshold] = useState("500");
-  const [alerting, setAlerting] = useState(true);
-  const [history, setHistory] = useState(true);
-  const [devices, setDevices] = useState<DeviceRow[]>([
-    { name: "", type: "THERMOSTAT", location: "" },
-  ]);
+  const [summary, setSummary] = useState<CreatedSummary | null>(null);
 
   async function generate() {
     setBusy(true);
     setError(null);
     try {
-      await initialize({ mode: "generate" });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start the demo.");
-      setBusy(false);
-    }
-  }
-
-  async function submitCustom(e: React.FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) return setError("Please enter a name.");
-    if (!EMAIL_RE.test(email.trim())) return setError("Please enter a valid email address.");
-    const clean = devices.filter((d) => d.name.trim() && d.location.trim());
-    if (clean.length === 0) return setError("Add at least one device, or start with the demo home.");
-
-    const thresholdValue = Number(threshold);
-    if (!Number.isFinite(thresholdValue) || thresholdValue <= 0) {
-      return setError("Threshold must be a positive number.");
-    }
-
-    setBusy(true);
-    setError(null);
-    try {
-      await initialize({
-        mode: "custom",
-        name: name.trim(),
-        email: email.trim(),
-        address: address.trim(),
-        energyAlertingThreshold: thresholdValue,
-        alerting,
-        history,
-        devices: clean,
+      const demo = await initialize({ mode: "generate" });
+      const [devices, usage, coverage, alerts] = await Promise.all([
+        getDevicesByUser(demo.userId),
+        getUsage(demo.userId, 7),
+        getCoverage(demo.userId),
+        getAlerts(demo.userId, 50),
+      ]);
+      setSummary({
+        demo,
+        devices,
+        totalKwh: usage.devices.reduce((s, d) => s + d.energyConsumed, 0),
+        daysWithData: coverage.daysWithData,
+        maxDays: coverage.maxDays,
+        alertCount: alerts.length,
+        violations: alerts.filter((a) => a.energyConsumed > a.threshold).length,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create your account.");
+      setError(err instanceof Error ? err.message : "Could not start the demo.");
+    } finally {
       setBusy(false);
     }
-  }
-
-  function updateDevice(index: number, patch: Partial<DeviceRow>) {
-    setDevices((prev) => prev.map((d, i) => (i === index ? { ...d, ...patch } : d)));
   }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface-1 p-4">
-      <div className="w-full max-w-2xl">
+      <div className="w-full max-w-xl">
         <div className="mb-5 flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-accent/30 bg-accent-soft text-accent-text">
+          <span className="flex h-9 w-9 items-center justify-center rounded-[var(--radius)] border border-accent/30 bg-accent-soft text-accent-text">
             <BrandMark size={18} />
           </span>
           <div className="leading-tight">
             <div className="text-[15px] font-semibold tracking-tight text-text">EnergyTracker</div>
-            <div className="font-mono text-[9px] font-medium uppercase tracking-[0.14em] text-text-muted">
-              Playground
-            </div>
+            <div className="text-[10.5px] font-medium text-text-muted">Playground</div>
           </div>
         </div>
 
         <div className="panel p-6 sm:p-7">
-          {view === "choose" ? (
+          {summary ? (
+            <CreatedView summary={summary} onEnter={() => enter(summary.demo)} />
+          ) : (
             <>
+              <div className="overline mb-3">First run · Setup</div>
               <h1 className="text-xl font-semibold tracking-tight text-text">
                 Welcome — let&apos;s set up your energy tracker
               </h1>
               <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-text-secondary">
                 This is a self-contained demo: readings, alerts and AI tips are
-                simulated in the browser, so there is nothing to install. Start
-                with a ready-made home, or bring your own.
+                simulated in the browser, so there is nothing to install. Create
+                a fresh account, then add your own devices and readings.
               </p>
 
-              <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => void generate()}
-                  disabled={busy}
-                  className={clsx(
-                    "panel-raised group flex flex-col items-start gap-3 p-5 text-left transition-colors",
-                    "hover:border-accent/40 disabled:cursor-not-allowed disabled:opacity-60",
-                  )}
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-sm)] border border-accent/25 bg-accent-soft text-accent-text">
-                    <MagicWand width={18} height={18} />
+              <button
+                type="button"
+                onClick={() => void generate()}
+                disabled={busy}
+                className={clsx(
+                  "mt-6 flex w-full items-center gap-4 rounded-[var(--radius-lg)] border border-border bg-surface-0 p-5 text-left transition-colors",
+                  "hover:border-accent/40 hover:bg-accent-soft/30 disabled:cursor-not-allowed disabled:opacity-60",
+                )}
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius)] border border-accent/25 bg-accent-soft text-accent-text">
+                  <MagicWand width={20} height={20} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[14px] font-semibold text-text">
+                    {busy ? "Creating your demo account…" : "Create a demo account"}
                   </span>
-                  <div>
-                    <div className="text-[14px] font-semibold text-text">Generate a demo home</div>
-                    <p className="mt-1 text-[12px] leading-snug text-text-secondary">
-                      One click. Three devices, a week of realistic readings, a
-                      500 kWh limit and two past alerts — ready to explore.
-                    </p>
-                  </div>
-                  <span className="mt-auto inline-flex items-center gap-1.5 text-[12px] font-medium text-accent-text">
-                    {busy ? "Setting up…" : "Start in one click"}
-                    <NavArrowLeft width={13} height={13} className="rotate-180" />
+                  <span className="mt-0.5 block text-[12px] leading-snug text-text-secondary">
+                    A fresh account with a 500 kWh alert limit. Nothing is
+                    pre-filled — you add the devices and dispatch the readings.
                   </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setError(null);
-                    setView("custom");
-                  }}
-                  disabled={busy}
-                  className={clsx(
-                    "panel-raised group flex flex-col items-start gap-3 p-5 text-left transition-colors",
-                    "hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-60",
-                  )}
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-sm)] border border-border bg-surface-2 text-text-secondary">
-                    <User width={18} height={18} />
-                  </span>
-                  <div>
-                    <div className="text-[14px] font-semibold text-text">Set up my own</div>
-                    <p className="mt-1 text-[12px] leading-snug text-text-secondary">
-                      Enter your details, pick a limit and add your own devices.
-                      Optionally include a week of history.
-                    </p>
-                  </div>
-                  <span className="mt-auto inline-flex items-center gap-1.5 text-[12px] font-medium text-text-secondary">
-                    Configure it myself
-                    <NavArrowLeft width={13} height={13} className="rotate-180" />
-                  </span>
-                </button>
-              </div>
+                </span>
+                <span className="flex shrink-0 items-center gap-1.5 text-[12px] font-medium text-accent-text">
+                  {busy ? "Working…" : "Start"}
+                  <NavArrowRight width={14} height={14} />
+                </span>
+              </button>
 
               {error && (
                 <div className="mt-4">
-                  <AlertBanner title="Could not start" description={error} onDismiss={() => setError(null)} />
+                  <AlertBanner
+                    title="Could not start"
+                    description={error}
+                    onDismiss={() => setError(null)}
+                  />
                 </div>
               )}
             </>
-          ) : (
-            <form onSubmit={submitCustom} className="flex flex-col gap-5">
-              <div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setError(null);
-                    setView("choose");
-                  }}
-                  className="inline-flex items-center gap-1.5 text-[12px] font-medium text-text-muted transition-colors hover:text-text"
-                >
-                  <NavArrowLeft width={13} height={13} />
-                  Back
-                </button>
-                <h1 className="mt-3 text-xl font-semibold tracking-tight text-text">
-                  Create your account
-                </h1>
-                <p className="mt-1.5 text-[13px] text-text-secondary">
-                  Everything lives in a session cookie — no sign-up, no email is sent.
-                </p>
-              </div>
-
-              {error && (
-                <AlertBanner title="Check your details" description={error} onDismiss={() => setError(null)} />
-              )}
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Input
-                  label="Name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Jane Doe"
-                  autoComplete="name"
-                />
-                <Input
-                  label="Email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="jane@home.dev"
-                  autoComplete="email"
-                />
-                <Input
-                  label="Address (optional)"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="24 Maple Street"
-                  className="sm:col-span-2"
-                />
-                <Input
-                  label="Alert threshold (kWh)"
-                  type="number"
-                  min="0.1"
-                  step="0.1"
-                  value={threshold}
-                  onChange={(e) => setThreshold(e.target.value)}
-                  className="font-mono tabular"
-                />
-                <div className="flex flex-col justify-end">
-                  <div className="flex items-center justify-between rounded-[var(--radius)] border border-border bg-surface-0 px-3.5 py-2.5">
-                    <span className="text-[12.5px] font-medium text-text">Alerting on</span>
-                    <Switch checked={alerting} onChange={setAlerting} label="Toggle alerting" />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="overline">Devices</span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() =>
-                      setDevices((prev) => [...prev, { name: "", type: "LIGHT", location: "" }])
-                    }
-                    disabled={devices.length >= 6}
-                  >
-                    <Plus width={13} height={13} />
-                    Add device
-                  </Button>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  {devices.map((device, i) => (
-                    <div
-                      key={i}
-                      className="grid grid-cols-1 gap-2 rounded-[var(--radius)] border border-border bg-surface-0 p-3 sm:grid-cols-12"
-                    >
-                      <Input
-                        aria-label={`Device ${i + 1} name`}
-                        placeholder="Device name"
-                        value={device.name}
-                        onChange={(e) => updateDevice(i, { name: e.target.value })}
-                        className="sm:col-span-5"
-                      />
-                      <Select
-                        aria-label={`Device ${i + 1} type`}
-                        value={device.type}
-                        onChange={(e) => updateDevice(i, { type: e.target.value as DeviceType })}
-                        className="sm:col-span-3"
-                      >
-                        {DEVICE_TYPES.map((t) => (
-                          <option key={t} value={t}>
-                            {t}
-                          </option>
-                        ))}
-                      </Select>
-                      <Input
-                        aria-label={`Device ${i + 1} location`}
-                        placeholder="Location"
-                        value={device.location}
-                        onChange={(e) => updateDevice(i, { location: e.target.value })}
-                        className="sm:col-span-3"
-                      />
-                      <button
-                        type="button"
-                        aria-label={`Remove device ${i + 1}`}
-                        onClick={() => setDevices((prev) => prev.filter((_, idx) => idx !== i))}
-                        disabled={devices.length <= 1}
-                        className="flex items-center justify-center rounded-[var(--radius)] border border-border text-text-muted transition-colors hover:border-critical/40 hover:text-critical-text disabled:cursor-not-allowed disabled:opacity-40 sm:col-span-1"
-                      >
-                        <Trash width={14} height={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <label className="mt-3 flex items-center justify-between gap-3 rounded-[var(--radius)] border border-border bg-surface-0 px-3.5 py-2.5">
-                  <span className="text-[12.5px] text-text-secondary">
-                    Include 7 days of realistic history
-                  </span>
-                  <Switch checked={history} onChange={setHistory} label="Toggle history" />
-                </label>
-              </div>
-
-              <div className="flex items-center justify-end">
-                <Button type="submit" variant="primary" disabled={busy}>
-                  <Check width={14} height={14} />
-                  {busy ? "Creating…" : "Create my tracker"}
-                </Button>
-              </div>
-            </form>
           )}
         </div>
 
         <p className="mt-4 text-center text-[11px] text-text-muted">
           No account, no database, no email — a self-contained simulation.
         </p>
+      </div>
+    </div>
+  );
+}
+
+function CreatedView({ summary, onEnter }: { summary: CreatedSummary; onEnter: () => void }) {
+  const { demo, devices, totalKwh, daysWithData, maxDays, alertCount, violations } = summary;
+
+  return (
+    <>
+      <div className="overline mb-3">Demo account ready</div>
+      <h1 className="text-xl font-semibold tracking-tight text-text">Your demo account is ready</h1>
+      <p className="mt-2 text-[13px] leading-relaxed text-text-secondary">
+        We created a demo account for{" "}
+        <span className="font-medium text-text">{demo.name || "Demo User"}</span>. It starts empty —
+        nothing is connected to real hardware, so you build the home from here.
+      </p>
+
+      <div className="panel mt-5 divide-y divide-border p-0">
+        <SummaryRow
+          icon={User}
+          label="Account"
+          value={demo.name || "Demo User"}
+          text
+          hint={demo.email || "demo@energytracker.dev"}
+        />
+        <SummaryRow
+          icon={GraphUp}
+          label="Alert threshold"
+          value={kwh(demo.energyAlertingThreshold ?? 0, 0)}
+          unit="kWh"
+          hint={demo.alerting ? "Alerting armed" : "Alerting muted"}
+        />
+        <SummaryRow
+          icon={Cpu}
+          label="Devices"
+          value={String(devices.length)}
+          hint={devices.length ? "Ready to report telemetry" : "Add them on the Devices page"}
+        />
+        {daysWithData > 0 && (
+          <SummaryRow
+            icon={Calendar}
+            label="Simulated history"
+            value={`${daysWithData}/${maxDays}`}
+            unit="days"
+            hint={`${kwh(totalKwh)} kWh of readings`}
+          />
+        )}
+        <SummaryRow
+          icon={Bell}
+          label="Alerts"
+          value={String(alertCount)}
+          hint={
+            alertCount
+              ? `${violations} threshold ${violations === 1 ? "violation" : "violations"}`
+              : "Raised when load crosses the limit"
+          }
+        />
+      </div>
+
+      {devices.length === 0 && (
+        <div className="mt-5">
+          <div className="overline mb-2">Next steps</div>
+          <ol className="flex flex-col gap-1.5 text-[12.5px] leading-relaxed text-text-secondary">
+            <li>1. Register a device on the Devices page.</li>
+            <li>2. Dispatch synthetic readings from Simulation to build history.</li>
+            <li>3. Generate saving tips on Insights once telemetry exists.</li>
+          </ol>
+        </div>
+      )}
+
+      {devices.length > 0 && (
+        <div className="mt-5">
+          <div className="overline mb-2">Devices created</div>
+          <ul className="flex flex-col gap-2">
+            {devices.map((d) => {
+              const meta = deviceMeta(d.type);
+              const Icon = meta.icon;
+              return (
+                <li key={d.deviceId} className="flex items-center gap-3">
+                  <span
+                    className={clsx(
+                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] border",
+                      meta.tint,
+                    )}
+                  >
+                    <Icon width={14} height={14} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-medium text-text">{d.name}</div>
+                    <div className="text-[11.5px] text-text-muted">
+                      {meta.label} · {d.location}
+                    </div>
+                  </div>
+                  <span className="shrink-0 font-mono text-[10.5px] text-text-muted">
+                    DEV-{String(d.deviceId).padStart(3, "0")}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      <div className="mt-6 flex items-center justify-end">
+        <Button variant="primary" onClick={onEnter}>
+          Enter dashboard
+          <NavArrowRight width={14} height={14} />
+        </Button>
+      </div>
+    </>
+  );
+}
+
+function SummaryRow({
+  icon: Icon,
+  label,
+  value,
+  unit,
+  hint,
+  text = false,
+}: {
+  icon: React.ComponentType<{ width?: number; height?: number }>;
+  label: string;
+  value: string;
+  unit?: string;
+  hint: string;
+  text?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-3 px-5 py-3.5">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-surface-2 text-text-secondary">
+        <Icon width={15} height={15} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[11.5px] text-text-secondary">{label}</div>
+        <div className="mt-0.5 flex items-baseline gap-1.5">
+          <span
+            className={clsx(
+              "font-semibold leading-none text-text",
+              text ? "text-[14px]" : "text-[20px] tabular tracking-tight",
+            )}
+          >
+            {value}
+          </span>
+          {unit && <span className="text-[11px] text-text-muted">{unit}</span>}
+        </div>
+        <div className="mt-0.5 text-[11px] text-text-muted">{hint}</div>
       </div>
     </div>
   );

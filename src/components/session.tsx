@@ -27,9 +27,12 @@ interface SessionContextValue {
   error: string | null;
   refresh: () => void;
   patchUser: (user: UserDto) => void;
-  /** Provision the session during first-run onboarding. Throws on failure so
-   *  the onboarding form can show a field-level error without leaving the gate. */
-  initialize: (input: OnboardingInput) => Promise<void>;
+  /** Provision the session during first-run onboarding. Returns the created
+   *  account without entering the app yet, so onboarding can show what was
+   *  created before the gate opens. Throws on failure. */
+  initialize: (input: OnboardingInput) => Promise<UserDto>;
+  /** Adopt a provisioned account and switch the gate into the app. */
+  enter: (demo: UserDto) => void;
   /** Forget the session and return to first-run onboarding. */
   reset: () => Promise<void>;
 }
@@ -90,13 +93,11 @@ export function DemoSessionProvider({ children }: { children: ReactNode }) {
 
   const patchUser = useCallback((next: UserDto) => setUser(next), []);
 
-  const initialize = useCallback(
-    async (input: OnboardingInput) => {
-      const demo = await initializeDemo(input);
-      applySuccess(demo);
-    },
-    [applySuccess],
-  );
+  // Provision but do not enter — onboarding reviews the result first, then
+  // calls enter() to open the gate.
+  const initialize = useCallback((input: OnboardingInput) => initializeDemo(input), []);
+
+  const enter = useCallback((demo: UserDto) => applySuccess(demo), [applySuccess]);
 
   const reset = useCallback(async () => {
     await resetDemo();
@@ -106,8 +107,8 @@ export function DemoSessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, status, error, refresh, patchUser, initialize, reset }),
-    [user, status, error, refresh, patchUser, initialize, reset],
+    () => ({ user, status, error, refresh, patchUser, initialize, enter, reset }),
+    [user, status, error, refresh, patchUser, initialize, enter, reset],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

@@ -63,7 +63,11 @@ export default function SimulationPage() {
           icon={<WifiOff width={22} height={22} />}
           title={status === "missing" ? "Demo session not initialized" : "Demo backend unreachable"}
           description={error ?? "The request to the Next.js API layer failed. Retry in a moment."}
-          actions={<Button variant="primary" onClick={() => void refresh()}>Retry</Button>}
+          actions={
+            <Button variant="primary" onClick={() => void refresh()}>
+              Retry
+            </Button>
+          }
         />
       </>
     );
@@ -141,49 +145,77 @@ export default function SimulationPage() {
     }
   }
 
+  const noDevices = !devices.loading && !devices.refreshing && (devices.data ?? []).length === 0;
+
   return (
     <>
       <PageHeader
-        overline="Simulation"
-        title="Telemetry lab"
-        description="Tune the system-wide threshold and push synthetic readings through Kafka"
+        title="Simulation"
+        description="Configure alerting and dispatch synthetic telemetry through the ingestion pipeline."
+        actions={
+          <Button
+            size="sm"
+            disabled={devices.refreshing}
+            onClick={() => {
+              void devices.reload();
+              void refresh();
+            }}
+          >
+            <Refresh
+              width={13}
+              height={13}
+              className={devices.refreshing ? "animate-spin" : undefined}
+            />
+            {devices.refreshing ? "Syncing…" : "Sync state"}
+          </Button>
+        }
       />
 
-      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
-        {/* Threshold settings */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        {/* Threshold configuration */}
         <Card className="lg:col-span-5">
-          <div className="mb-4">
-            <h2 className="type-section text-text">System threshold</h2>
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <h2 className="type-section text-text">Threshold configuration</h2>
+            <Badge tone={user.alerting ? "success" : "neutral"} dot={user.alerting}>
+              {user.alerting ? "armed" : "muted"}
+            </Badge>
           </div>
-
           <p className="mb-4 text-[12.5px] leading-relaxed text-text-secondary">
-            A single ceiling evaluated against aggregate device load. When the sum
-            crosses this value, the alert service emits a violation event.
+            A single ceiling evaluated against aggregate device load. When the sum crosses this
+            value, the alert service emits a violation event.
           </p>
 
           {settingsError && (
             <div className="mb-3">
-              <AlertBanner title="Update failed" description={settingsError} onDismiss={() => setSettingsError(null)} />
+              <AlertBanner
+                title="Update failed"
+                description={settingsError}
+                onDismiss={() => setSettingsError(null)}
+              />
             </div>
           )}
           {settingsSaved && (
             <div className="mb-3">
-              <AlertBanner tone="warning" title="Threshold updated" description="New limit is live for the next evaluation cycle." />
+              <AlertBanner
+                tone="success"
+                title="Threshold updated"
+                description="New limit is live for the next evaluation cycle."
+              />
             </div>
           )}
 
           <form onSubmit={saveSettings} className="flex flex-col gap-4">
             <Input
-              label="Threshold (kWh per evaluation window)"
+              label="Threshold value (kWh per window)"
               type="number"
               step="0.1"
               min="0.1"
               value={threshold}
               onChange={(e) => setThresholdInput(e.target.value)}
-              className="font-mono tabular"
+              className="tabular"
             />
 
-            <div className="flex items-center justify-between rounded-[var(--radius)] border border-border bg-surface-0 px-3.5 py-3">
+            <div className="flex items-center justify-between rounded-[var(--radius)] border border-border bg-surface-1 px-3.5 py-3">
               <div>
                 <div className="text-[13px] font-medium text-text">Edge-triggered alerting</div>
                 <div className="text-[11.5px] text-text-muted">
@@ -198,9 +230,7 @@ export default function SimulationPage() {
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="font-mono text-[11px] text-text-muted">
-                PUT /user/{user.userId}
-              </span>
+              <span className="font-mono text-[11px] text-text-muted">PUT /user/{user.userId}</span>
               <Button
                 type="submit"
                 variant="primary"
@@ -214,161 +244,172 @@ export default function SimulationPage() {
           </form>
         </Card>
 
-        {/* Dispatch panel */}
-        <div className="flex flex-col gap-5 lg:col-span-7">
-          <Card>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="type-section text-text">Dispatch synthetic telemetry</h2>
-              <Badge tone={dispatching ? "accent" : "neutral"} dot={!!dispatching}>
-                {dispatching ? "pipeline active" : "idle"}
-              </Badge>
+        {/* Dispatch */}
+        <Card className="lg:col-span-7">
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <h2 className="type-section text-text">Dispatch synthetic telemetry</h2>
+            <Badge tone={dispatching ? "accent" : "neutral"} dot={!!dispatching}>
+              {dispatching ? "pipeline active" : "idle"}
+            </Badge>
+          </div>
+          <p className="mb-4 text-[12.5px] leading-relaxed text-text-secondary">
+            Push a batch of readings for one device. Normal batches stay under the limit; the
+            high-spike batch deterministically trips it.
+          </p>
+
+          {dispatchError && (
+            <div className="mb-3">
+              <AlertBanner
+                title="Ingestion rejected"
+                description={dispatchError}
+                onDismiss={() => setDispatchError(null)}
+              />
             </div>
+          )}
 
-            {dispatchError && (
-              <div className="mb-3">
-                <AlertBanner
-                  title="Ingestion rejected"
-                  description={dispatchError}
-                  onDismiss={() => setDispatchError(null)}
-                />
-              </div>
-            )}
+          <Select
+            label="Target device"
+            value={selectedDevice ?? ""}
+            onChange={(e) => setSelectedDevice(Number(e.target.value) || null)}
+          >
+            <option value="">Select a device…</option>
+            {(devices.data ?? []).map((d) => (
+              <option key={d.deviceId} value={d.deviceId}>
+                #{d.deviceId} · {d.name} ({d.location})
+              </option>
+            ))}
+          </Select>
 
-            <Select
-              label="Target device"
-              value={selectedDevice ?? ""}
-              onChange={(e) => setSelectedDevice(Number(e.target.value) || null)}
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              onClick={() => void dispatch("normal")}
+              disabled={!selected || dispatching != null}
+              className="group flex items-start gap-3 rounded-[var(--radius)] border border-border bg-surface-1 p-4 text-left transition-colors hover:border-accent/50 hover:bg-accent-soft/40 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <option value="">Select a device…</option>
-              {(devices.data ?? []).map((d) => (
-                <option key={d.deviceId} value={d.deviceId}>
-                  #{d.deviceId} · {d.name} ({d.location})
-                </option>
-              ))}
-            </Select>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <button
-                onClick={() => void dispatch("normal")}
-                disabled={!selected || dispatching != null}
-                className="panel-raised group flex flex-col items-start gap-1.5 p-4 text-left transition-colors hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <div className="flex w-full items-center justify-between">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] border border-accent/25 bg-accent-soft text-accent-text">
-                    <Activity width={14} height={14} />
-                  </span>
-                  <Play width={13} height={13} className="text-text-muted transition-colors group-hover:text-accent-text" />
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] bg-accent-soft text-accent-text">
+                <Activity width={15} height={15} />
+              </span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 text-[13px] font-semibold text-text">
+                  Normal usage
+                  <Play
+                    width={12}
+                    height={12}
+                    className="text-text-muted transition-colors group-hover:text-accent-text"
+                  />
                 </div>
-                <div className="mt-1 text-[13px] font-semibold text-text">Normal usage</div>
-                <p className="text-[11.5px] leading-snug text-text-secondary">
+                <p className="mt-0.5 text-[11.5px] leading-snug text-text-secondary">
                   10 readings · 0.5–2.0 kWh · stays under the limit
                 </p>
-              </button>
+              </div>
+            </button>
 
-              <button
-                onClick={() => void dispatch("high")}
-                disabled={!selected || dispatching != null}
-                className="panel-raised group flex flex-col items-start gap-1.5 p-4 text-left transition-colors hover:border-critical/40 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <div className="flex w-full items-center justify-between">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] border border-critical/28 bg-critical-soft text-critical-text">
-                    <GraphUp width={14} height={14} />
-                  </span>
-                  <Play width={13} height={13} className="text-text-muted transition-colors group-hover:text-critical-text" />
+            <button
+              onClick={() => void dispatch("high")}
+              disabled={!selected || dispatching != null}
+              className="group flex items-start gap-3 rounded-[var(--radius)] border border-border bg-surface-1 p-4 text-left transition-colors hover:border-critical/50 hover:bg-critical-soft/40 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] bg-critical-soft text-critical-text">
+                <GraphUp width={15} height={15} />
+              </span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 text-[13px] font-semibold text-text">
+                  High spike
+                  <Play
+                    width={12}
+                    height={12}
+                    className="text-text-muted transition-colors group-hover:text-critical-text"
+                  />
                 </div>
-                <div className="mt-1 text-[13px] font-semibold text-text">High spike</div>
-                <p className="text-[11.5px] leading-snug text-text-secondary">
+                <p className="mt-0.5 text-[11.5px] leading-snug text-text-secondary">
                   5 readings · 100–150 kWh · deterministic violation
                 </p>
-              </button>
-            </div>
-
-            {(devices.loading || devices.refreshing) && (
-              <div className="mt-3">
-                <Skeleton className="h-9 w-full" />
               </div>
-            )}
-            {!devices.loading && !devices.refreshing && (devices.data ?? []).length === 0 && (
-              <p className="mt-3 text-[12px] text-text-muted">
-                No devices available — register one on the Devices page first.
-              </p>
-            )}
-          </Card>
+            </button>
+          </div>
 
-          {/* Pipeline lifecycle log */}
-          <Card>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="type-section text-text">Pipeline activity</h2>
-              <span className="font-mono text-[10.5px] text-text-muted">kafka → usage service</span>
+          {(devices.loading || devices.refreshing) && (
+            <div className="mt-3">
+              <Skeleton className="h-9 w-full" />
             </div>
-            {log.length === 0 ? (
-              <p className="py-5 text-center text-[12px] text-text-muted">
-                No dispatches this session. Pick a device and push readings.
-              </p>
-            ) : (
-              <ul className="flex flex-col divide-y divide-border">
-                {log.map((entry) => {
-                  const meta = deviceMeta(
-                    (devices.data ?? []).find((d) => d.deviceId === entry.deviceId)?.type ?? "LIGHT",
-                  );
-                  return (
-                    <li key={entry.id} className="flex items-center gap-3 py-2.5">
-                      <span
-                        className={clsx(
-                          "h-1.5 w-1.5 shrink-0 rounded-full",
-                          entry.ok ? "bg-accent" : "bg-critical",
-                        )}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate text-[12.5px] font-medium text-text">
-                            #{entry.deviceId} {entry.deviceName}
-                          </span>
-                          <Badge tone={entry.mode === "high" ? "critical" : "accent"}>
-                            {entry.mode}
-                          </Badge>
-                        </div>
-                        <div className="truncate font-mono text-[10.5px] text-text-muted">
-                          {entry.detail}
-                        </div>
-                      </div>
-                      <span className="shrink-0 font-mono text-[10px] text-text-muted">
-                        {new Date(entry.at).toLocaleTimeString("en-US", { hour12: false })}
-                      </span>
-                      <meta.icon className="hidden shrink-0 text-text-muted sm:block" width={13} height={13} />
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </Card>
-        </div>
+          )}
+          {noDevices && (
+            <p className="mt-3 text-[12px] text-text-muted">
+              No devices available — register one on the Devices page first.
+            </p>
+          )}
+
+          <div className="mt-5 border-t border-border pt-4">
+            <div className="text-[12.5px] text-text-secondary">
+              Current effective limit{" "}
+              <span className="font-semibold tabular text-text">
+                {kwh(user.energyAlertingThreshold, 2)} kWh
+              </span>{" "}
+              · alerting {user.alerting ? "armed" : "muted"}
+            </div>
+          </div>
+        </Card>
       </div>
 
-      {/* Context strip */}
-      <Card className="mt-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="text-[12px] text-text-secondary">
-          Current effective limit{" "}
-          <span className="font-mono font-semibold text-warning-text">
-            {kwh(user.energyAlertingThreshold, 2)} kWh
-          </span>{" "}
-          · alerting {user.alerting ? "armed" : "muted"}
+      {/* Pipeline activity */}
+      <Card className="mt-5 p-0">
+        <div className="flex items-center justify-between gap-4 border-b border-border px-5 py-3.5">
+          <div className="flex items-center gap-2">
+            <h2 className="type-section text-text">Pipeline activity</h2>
+            <span className="font-mono text-[10.5px] text-text-muted">kafka → usage service</span>
+          </div>
+          <span className="text-[11px] text-text-muted">
+            {log.length} dispatch{log.length === 1 ? "" : "es"}
+          </span>
         </div>
-        <Button
-          size="sm"
-          disabled={devices.refreshing}
-          onClick={() => {
-            void devices.reload();
-            void refresh();
-          }}
-        >
-          <Refresh
-            width={13}
-            height={13}
-            className={devices.refreshing ? "animate-spin" : undefined}
-          />
-          {devices.refreshing ? "Syncing…" : "Sync state"}
-        </Button>
+        {log.length === 0 ? (
+          <p className="px-5 py-8 text-center text-[12px] text-text-muted">
+            No dispatches this session. Pick a device and push readings.
+          </p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {log.map((entry) => {
+              const meta = deviceMeta(
+                (devices.data ?? []).find((d) => d.deviceId === entry.deviceId)?.type ?? "LIGHT",
+              );
+              const Icon = meta.icon;
+              return (
+                <li key={entry.id} className="flex items-center gap-3 px-5 py-2.5">
+                  <span
+                    className={clsx(
+                      "h-2 w-2 shrink-0 rounded-full",
+                      entry.ok ? "bg-success" : "bg-critical",
+                    )}
+                  />
+                  <span
+                    className={clsx(
+                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border",
+                      meta.tint,
+                    )}
+                  >
+                    <Icon width={12} height={12} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-[12.5px] font-medium text-text">
+                        #{entry.deviceId} {entry.deviceName}
+                      </span>
+                      <Badge tone={entry.mode === "high" ? "critical" : "accent"}>
+                        {entry.mode}
+                      </Badge>
+                    </div>
+                    <div className="truncate font-mono text-[10.5px] text-text-muted">
+                      {entry.detail}
+                    </div>
+                  </div>
+                  <span className="shrink-0 font-mono text-[10.5px] text-text-muted">
+                    {new Date(entry.at).toLocaleTimeString("en-US", { hour12: false })}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </Card>
 
       {alertToast && (
@@ -399,6 +440,7 @@ function SimulationSkeleton() {
         <Skeleton className="h-96 lg:col-span-5" />
         <Skeleton className="h-96 lg:col-span-7" />
       </div>
+      <Skeleton className="mt-5 h-40 w-full" />
     </>
   );
 }

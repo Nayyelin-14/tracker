@@ -52,9 +52,9 @@ export function ThemeToggle() {
       aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
       title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
       className={clsx(
-        "ml-auto flex h-7 w-7 items-center justify-center rounded-[var(--radius-sm)]",
-        "text-text-muted transition-colors hover:bg-surface-2 hover:text-text",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60",
+        "flex h-8 w-8 items-center justify-center rounded-[var(--radius)]",
+        "text-text-secondary transition-colors hover:bg-surface-2 hover:text-text",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
       )}
     >
       {theme === "dark" ? <SunLight width={14} height={14} /> : <MoonSat width={14} height={14} />}

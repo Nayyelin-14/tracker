@@ -105,20 +105,20 @@ function ChartTooltip({ active, payload, threshold }: TooltipProps) {
   if (point.total === null) return null;
   const over = point.total > threshold;
   return (
-    <div className="panel-raised px-3 py-2 text-[12px]">
-      <div className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
-        {point.label}
-      </div>
+    <div className="panel-raised min-w-[132px] px-3 py-2 text-[12px]">
+      <div className="text-[10.5px] font-medium text-text-muted">{point.label}</div>
       <div
         className={
           over
-            ? "mt-1 font-mono font-semibold text-critical-text"
-            : "mt-1 font-mono font-semibold text-text"
+            ? "mt-1 text-[15px] font-semibold tabular text-critical-text"
+            : "mt-1 text-[15px] font-semibold tabular text-text"
         }
       >
-        {kwh(point.total, 2)} kWh
-        {over && <span className="ml-1.5 text-[10px] font-normal">over limit</span>}
+        {kwh(point.total, 2)} <span className="text-[11px] font-normal text-text-muted">kWh</span>
       </div>
+      {over && (
+        <div className="mt-0.5 text-[10.5px] font-medium text-critical-text">Over threshold</div>
+      )}
     </div>
   );
 }
@@ -137,26 +137,28 @@ export function UsageChart({
   return (
     <div className={compact ? "h-52 w-full" : "h-72 w-full"}>
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
+        <AreaChart data={data} margin={{ top: 12, right: 12, bottom: 0, left: -8 }}>
           <defs>
             <linearGradient id="usageFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.22} />
-              <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
+              <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.26} />
+              <stop offset="100%" stopColor="var(--accent)" stopOpacity={0.02} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke="var(--border)" strokeDasharray="3 4" vertical={false} />
+          <CartesianGrid stroke="var(--border)" strokeWidth={1} vertical={false} />
           <XAxis
             dataKey="label"
             interval={interval - 1}
-            tick={{ fill: "var(--text-muted)", fontSize: 10, fontFamily: "var(--font-plex-mono)" }}
+            tick={{ fill: "var(--text-muted)", fontSize: 10, fontFamily: "var(--font-plex-sans)" }}
             tickLine={false}
             axisLine={{ stroke: "var(--border)" }}
+            tickMargin={8}
           />
           <YAxis
             tick={{ fill: "var(--text-muted)", fontSize: 10, fontFamily: "var(--font-plex-mono)" }}
             tickLine={false}
             axisLine={false}
             width={44}
+            tickMargin={6}
           />
           <Tooltip
             content={<ChartTooltip threshold={threshold} />}
@@ -173,7 +175,7 @@ export function UsageChart({
                 position: "insideTopLeft",
                 fill: "var(--warning-text)",
                 fontSize: 10,
-                fontFamily: "var(--font-plex-mono)",
+                fontFamily: "var(--font-plex-sans)",
                 offset: 8,
               }}
             />
@@ -182,11 +184,11 @@ export function UsageChart({
             type="monotone"
             dataKey="total"
             stroke="var(--accent)"
-            strokeWidth={1.75}
+            strokeWidth={2}
             fill="url(#usageFill)"
             dot={false}
             connectNulls={false}
-            activeDot={{ r: 3, fill: "var(--accent)", stroke: "var(--bg)", strokeWidth: 2 }}
+            activeDot={{ r: 3.5, fill: "var(--accent)", stroke: "var(--surface-0)", strokeWidth: 2 }}
           />
         </AreaChart>
       </ResponsiveContainer>

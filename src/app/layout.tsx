@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
-import { Manrope, IBM_Plex_Mono } from "next/font/google";
+import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { DemoSessionProvider } from "@/components/session";
 import { SessionGate } from "@/components/session-gate";
 
-// Two families only: Manrope for UI, IBM Plex Mono for data and technical text.
-const manrope = Manrope({
-  variable: "--font-manrope",
+// Two families only: IBM Plex Sans for the interface, IBM Plex Mono reserved
+// for technical identifiers, timestamps and diagnostic metadata.
+const plexSans = IBM_Plex_Sans({
+  variable: "--font-plex-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 
@@ -36,7 +38,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${manrope.variable} ${plexMono.variable} h-full antialiased`}
+      className={`${plexSans.variable} ${plexMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>

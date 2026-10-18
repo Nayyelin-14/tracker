@@ -2,21 +2,27 @@
 
 import type { ReactNode } from "react";
 import { WifiOff } from "iconoir-react";
-import { Button, EmptyState, Spinner } from "@/components/ui";
+import { Button, EmptyState } from "@/components/ui";
 import { useSession } from "@/components/session";
 import { Onboarding } from "@/components/onboarding";
-import { BrandMark } from "@/components/brand-mark";
 
 /**
- * Decides what the visitor sees before the app itself renders:
- * a boot screen while the session resolves, onboarding when there is no
- * session yet, a retry screen when the API layer is unreachable, and the
- * real app once the session is ready.
+ * Decides what the visitor sees before the app itself renders: onboarding when
+ * there is no session yet, a retry screen when the API layer is unreachable,
+ * and the real app otherwise.
+ *
+ * While the session is still resolving (`loading`) we render the shell and the
+ * page's own skeleton rather than replacing the whole tree with a boot screen.
+ * That matters under Cache Components: the `loading` state is the one that
+ * exists during prerender, so any branch that swaps out `children` here would
+ * drop the route's page segment from the static pass entirely — which is
+ * exactly what produced the "could not validate ... instant navigation"
+ * warning across every route. Keeping the segment in the tree lets Instant
+ * Navigation validate it and gives an instant shell on navigation.
  */
 export function SessionGate({ children }: { children: ReactNode }) {
   const { status, error, refresh } = useSession();
 
-  if (status === "loading") return <BootScreen />;
   if (status === "missing") return <Onboarding />;
   if (status === "offline") {
     return (
@@ -38,18 +44,4 @@ export function SessionGate({ children }: { children: ReactNode }) {
   }
 
   return <>{children}</>;
-}
-
-function BootScreen() {
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface-1">
-      <span className="flex h-11 w-11 items-center justify-center rounded-[12px] border border-accent/30 bg-accent-soft text-accent-text">
-        <BrandMark size={22} />
-      </span>
-      <div className="flex items-center gap-2 text-[12px] text-text-muted">
-        <Spinner size={14} />
-        Starting the playground…
-      </div>
-    </div>
-  );
 }

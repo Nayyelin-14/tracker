@@ -1,10 +1,29 @@
 "use client";
 
 import { useEffect, useId, useRef, type ComponentProps, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "iconoir-react";
 import { clsx } from "clsx";
 
-/** Hairline card with subtle shadow (no heavy drop shadows). */
+/**
+ * Renders children into document.body.
+ *
+ * Overlays must not mount inside the page subtree: any ancestor with a
+ * `transform` (including the page's `.fade-in` entrance animation, which keeps
+ * a transform after it finishes) becomes the containing block for
+ * `position: fixed`, so a radius-0 `inset-0` overlay would size itself to that
+ * subtree instead of the viewport — the sidebar stayed undimmed. Portalling to
+ * the body escapes every transformed ancestor.
+ *
+ * Dialog/Drawer only mount after a user interaction, so this never runs during
+ * SSR; the `typeof document` guard covers any future server-rendered use.
+ */
+export function Portal({ children }: { children: ReactNode }) {
+  if (typeof document === "undefined") return null;
+  return createPortal(children, document.body);
+}
+
+/** Soft-edged card with a whisper of elevation. */
 export function Card({
   className,
   raised = false,
@@ -18,7 +37,7 @@ export function Card({
   );
 }
 
-/** Small uppercase overline label. */
+/** Small sentence-case section label. Use sparingly. */
 export function Overline({
   children,
   className,
@@ -29,17 +48,18 @@ export function Overline({
   return <div className={clsx("overline", className)}>{children}</div>;
 }
 
-type Tone = "neutral" | "accent" | "warning" | "critical" | "info";
+type Tone = "neutral" | "accent" | "success" | "warning" | "critical" | "info";
 
 const TONES: Record<Tone, string> = {
-  neutral: "text-text-secondary bg-surface-2 border-border",
-  accent: "text-accent-text bg-accent-soft border-accent/25",
-  warning: "text-warning-text bg-warning-soft border-warning/28",
-  critical: "text-critical-text bg-critical-soft border-critical/28",
-  info: "text-info bg-info-soft border-info/25",
+  neutral: "text-text-secondary border-border bg-surface-1",
+  accent: "text-accent-text border-accent/30 bg-accent-soft",
+  success: "text-success-text border-success/30 bg-success-soft",
+  warning: "text-warning-text border-warning/30 bg-warning-soft",
+  critical: "text-critical-text border-critical/30 bg-critical-soft",
+  info: "text-info-text border-info/30 bg-info-soft",
 };
 
-/** Status chip — hairline border + tint wash, optional pulse dot. */
+/** Status chip — tinted wash + matching hairline, optional pulse dot. */
 export function Badge({
   tone = "neutral",
   dot = false,
@@ -54,7 +74,7 @@ export function Badge({
   return (
     <span
       className={clsx(
-        "inline-flex h-[22px] items-center gap-1.5 rounded-full border px-2.5 font-mono text-[11px] font-medium tabular",
+        "inline-flex h-5 items-center gap-1.5 rounded-[var(--radius-sm)] border px-1.5 text-[11px] font-medium tabular",
         TONES[tone],
         className,
       )}
@@ -73,12 +93,9 @@ export function Badge({
 type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary:
-    "bg-accent text-accent-on font-semibold hover:bg-accent-hover active:translate-y-px",
-  secondary:
-    "bg-surface-0 text-text border border-border-strong hover:bg-surface-2",
-  danger:
-    "bg-critical text-white font-semibold hover:bg-critical/90 active:translate-y-px",
+  primary: "bg-accent text-accent-on font-semibold hover:bg-accent-hover",
+  secondary: "bg-surface-0 text-text border border-border-strong hover:bg-surface-2",
+  danger: "bg-critical text-white font-semibold hover:opacity-90",
   ghost: "text-text-secondary hover:text-text hover:bg-surface-2",
 };
 
@@ -91,7 +108,7 @@ export function Button({
   return (
     <button
       className={clsx(
-        "inline-flex items-center justify-center gap-2 rounded-[10px] font-medium transition-colors",
+        "inline-flex items-center justify-center gap-2 rounded-[var(--radius)] font-medium transition-colors",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
         "disabled:cursor-not-allowed disabled:opacity-50",
         size === "sm" ? "h-8 px-3 text-[12px]" : "h-9 px-4 text-[13px]",
@@ -120,13 +137,13 @@ export function Input({
   if (!label) return input;
   return (
     <label className="flex flex-col gap-1.5" htmlFor={id}>
-      <Overline>{label}</Overline>
+      <span className="text-[12px] font-medium text-text-secondary">{label}</span>
       {input}
     </label>
   );
 }
 
-/** Native select styled as an instrument control. */
+/** Native select styled to match the form controls. */
 export function Select({
   label,
   className,
@@ -142,7 +159,7 @@ export function Select({
   if (!label) return select;
   return (
     <label className="flex flex-col gap-1.5" htmlFor={id}>
-      <Overline>{label}</Overline>
+      <span className="text-[12px] font-medium text-text-secondary">{label}</span>
       {select}
     </label>
   );
@@ -169,16 +186,18 @@ export function Switch({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={clsx(
-        "relative h-6 w-11 shrink-0 rounded-full border transition-colors",
+        "relative h-5 w-9 shrink-0 rounded-full border transition-colors",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
         "disabled:cursor-not-allowed disabled:opacity-50",
-        checked ? "border-accent bg-accent" : "border-border-strong bg-surface-2",
+        checked ? "border-accent bg-accent" : "border-border-strong bg-surface-3",
       )}
     >
       <span
         className={clsx(
-          "absolute top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow transition-all duration-150",
-          checked ? "left-[24px]" : "left-[2px]",
+          "absolute top-[3px] h-3 w-3 rounded-full bg-white transition-all duration-150",
+          checked
+            ? "left-[21px] bg-accent-on"
+            : "left-[3px] bg-surface-0 shadow-[0_1px_2px_rgba(0,0,0,0.2)]",
         )}
       />
     </button>
@@ -247,34 +266,29 @@ export function Dialog({
   }, [onClose]);
 
   return (
+    <Portal>
     <div
-      className={clsx(
-        "fixed inset-0 z-50 flex items-center justify-center p-4",
-        alert ? "role-alertdialog" : "role-dialog",
-      )}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:left-64"
       role={alert ? "alertdialog" : "dialog"}
       aria-modal="true"
       aria-label={title}
     >
       <button
-        className="absolute inset-0 bg-text/45 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-black/50"
         aria-label="Close dialog"
         onClick={onClose}
         tabIndex={-1}
       />
       <div
         ref={panelRef}
-        className={clsx(
-          "dialog-in panel relative w-full p-5 shadow-[var(--shadow-elevated)]",
-          width,
-        )}
+        className={clsx("dialog-in panel-raised relative w-full p-5", width)}
       >
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="type-section text-text">{title}</h2>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="rounded p-1 text-text-muted transition-colors hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition-colors hover:bg-surface-2 hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             <X width={16} height={16} />
           </button>
@@ -283,6 +297,7 @@ export function Dialog({
         {footer && <div className="mt-5 flex justify-end gap-2">{footer}</div>}
       </div>
     </div>
+    </Portal>
   );
 }
 
@@ -291,7 +306,7 @@ export function Drawer({
   title,
   children,
   onClose,
-  width = "max-w-[380px]",
+  width = "max-w-[400px]",
 }: {
   title: string;
   children: ReactNode;
@@ -318,14 +333,15 @@ export function Drawer({
   }, [onClose]);
 
   return (
+    <Portal>
     <div
-      className="fixed inset-0 z-50 flex justify-end"
+      className="fixed inset-0 z-50 flex justify-end lg:left-64"
       role="dialog"
       aria-modal="true"
       aria-label={title}
     >
       <button
-        className="absolute inset-0 bg-text/45 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-black/50"
         aria-label="Close drawer"
         onClick={onClose}
         tabIndex={-1}
@@ -342,7 +358,7 @@ export function Drawer({
           <button
             onClick={onClose}
             aria-label="Close"
-            className="rounded p-1 text-text-muted transition-colors hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition-colors hover:bg-surface-2 hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             <X width={16} height={16} />
           </button>
@@ -350,6 +366,7 @@ export function Drawer({
         <div className="flex-1 overflow-y-auto p-5">{children}</div>
       </div>
     </div>
+    </Portal>
   );
 }
 
@@ -392,7 +409,7 @@ export function EmptyState({
       )}
     >
       {icon && (
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-accent-text">
+        <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-[var(--radius)] bg-accent-soft text-accent-text">
           {icon}
         </div>
       )}
@@ -415,32 +432,27 @@ export function AlertBanner({
   action,
   onDismiss,
 }: {
-  tone?: "critical" | "warning";
+  tone?: "critical" | "warning" | "success";
   title: string;
   description?: ReactNode;
   action?: ReactNode;
   onDismiss?: () => void;
 }) {
-  const isCritical = tone === "critical";
+  const styles = {
+    critical: "border-critical/30 bg-critical-soft text-critical-text",
+    warning: "border-warning/30 bg-warning-soft text-warning-text",
+    success: "border-success/30 bg-success-soft text-success-text",
+  }[tone];
   return (
     <div
       role="alert"
       className={clsx(
         "flex flex-col gap-3 rounded-[var(--radius)] border p-4 sm:flex-row sm:items-center sm:justify-between",
-        isCritical
-          ? "border-critical/30 bg-critical-soft"
-          : "border-warning/30 bg-warning-soft",
+        styles,
       )}
     >
       <div>
-        <div
-          className={clsx(
-            "text-[13px] font-semibold",
-            isCritical ? "text-critical-text" : "text-warning-text",
-          )}
-        >
-          {title}
-        </div>
+        <div className="text-[13px] font-semibold">{title}</div>
         {description && (
           <div className="mt-0.5 text-[12px] text-text-secondary">{description}</div>
         )}
@@ -451,7 +463,7 @@ export function AlertBanner({
           <button
             onClick={onDismiss}
             aria-label="Dismiss"
-            className="rounded p-1 text-text-muted transition-colors hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition-colors hover:bg-surface-2 hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
               <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -472,7 +484,7 @@ export function Skeleton({ className }: { className?: string }) {
   );
 }
 
-/** Segmented toggle (hourly/daily style). */
+/** Segmented toggle — a real control with a raised active thumb. */
 export function SegmentedControl<T extends string>({
   options,
   value,
@@ -483,17 +495,18 @@ export function SegmentedControl<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="inline-flex items-center gap-0.5 rounded-full bg-surface-2 p-0.5">
+    <div className="inline-flex items-center gap-0.5 rounded-[var(--radius)] border border-border bg-surface-2 p-0.5">
       {options.map((opt) => (
         <button
           key={opt.value}
           onClick={() => onChange(opt.value)}
+          aria-pressed={value === opt.value}
           className={clsx(
-            "rounded-full px-3 py-1 text-[11px] font-medium transition-colors",
+            "rounded-[var(--radius-sm)] px-3 py-1 text-[11.5px] font-medium transition-colors",
             "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
             value === opt.value
-              ? "bg-accent text-accent-on shadow-[var(--shadow-card)]"
-              : "text-text-muted hover:text-text-secondary",
+              ? "bg-surface-0 text-text shadow-[var(--shadow-card)]"
+              : "text-text-muted hover:text-text",
           )}
         >
           {opt.label}

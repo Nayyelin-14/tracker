@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Cpu, MagicWand, WifiOff } from "iconoir-react";
+import { Cpu, MagicWand, Sparks, WifiOff } from "iconoir-react";
 import { PageHeader } from "@/components/page-header";
 import { useSession } from "@/components/session";
 import {
@@ -109,7 +109,11 @@ export default function InsightsPage() {
           icon={<WifiOff width={22} height={22} />}
           title={status === "missing" ? "Demo session not initialized" : "Demo backend unreachable"}
           description={error ?? "The request to the Next.js API layer failed. Retry in a moment."}
-          actions={<Button variant="primary" onClick={() => void refresh()}>Retry</Button>}
+          actions={
+            <Button variant="primary" onClick={() => void refresh()}>
+              Retry
+            </Button>
+          }
         />
       </>
     );
@@ -117,13 +121,13 @@ export default function InsightsPage() {
 
   const activeProvider =
     catalog?.providers.find((p) => p.id === effectiveProvider) ?? catalog?.providers[0];
+  const hasOutput = Boolean(streamText || result);
 
   return (
     <>
       <PageHeader
-        overline="Insights"
-        title="AI analysis"
-        description="LLM-assisted saving tips and consumption overviews"
+        title="Insights"
+        description="AI-generated analysis and recommendations for better energy efficiency."
         actions={
           <Badge tone="info">
             <Cpu width={11} height={11} /> {catalog?.defaultProvider ?? "provider"} · default
@@ -131,90 +135,75 @@ export default function InsightsPage() {
         }
       />
 
-      {/* Synthesis parameters */}
-      <Card className="mb-5">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="type-section text-text">Synthesis parameters</h2>
-          {providers.loading && <Skeleton className="h-4 w-24" />}
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div>
-            <div className="overline">Output</div>
-            <div className="mt-1.5">
-              <SegmentedControl
-                value={mode}
-                onChange={setMode}
-                options={[
-                  { value: "tips", label: "Saving tips" },
-                  { value: "overview", label: "Overview" },
-                ]}
-              />
-            </div>
+      {/* Compact generation controls — the workspace below is the priority */}
+      <Card className="mb-5 p-0">
+        <div className="flex flex-col gap-4 p-4 lg:flex-row lg:flex-wrap lg:items-end">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[12px] font-medium text-text-secondary">Output</span>
+            <SegmentedControl
+              value={mode}
+              onChange={setMode}
+              options={[
+                { value: "tips", label: "Saving tips" },
+                { value: "overview", label: "Overview" },
+              ]}
+            />
           </div>
 
-          <Select
-            label="Provider"
-            value={effectiveProvider}
-            onChange={(e) => {
-              const next = e.target.value;
-              setProvider(next);
-              const entry = catalog?.providers.find((p) => p.id === next);
-              setModel(entry?.models[0]?.id ?? "");
-            }}
-          >
-            {(catalog?.providers ?? []).map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.displayName}
-              </option>
-            ))}
-            {!catalog?.providers.length && <option value="">loading…</option>}
-          </Select>
-
-          <Select
-            label="Model"
-            value={effectiveModel}
-            onChange={(e) => setModel(e.target.value)}
-          >
-            {(activeProvider?.models ?? []).map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.displayName}
-              </option>
-            ))}
-            {!activeProvider?.models.length && <option value="">default</option>}
-          </Select>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-end justify-between gap-3 border-t border-border pt-4">
-          <div>
-            <div className="overline">Analysis window</div>
-            <div className="mt-1.5">
-              <SegmentedControl
-                value={String(days)}
-                onChange={(v) => setDays(Number(v) as Days)}
-                options={[
-                  { value: "3", label: "3 days" },
-                  { value: "7", label: "7 days" },
-                  { value: "30", label: "30 days" },
-                ]}
-              />
-            </div>
+          <div className="w-full lg:w-52">
+            <Select
+              label="Provider"
+              value={effectiveProvider}
+              onChange={(e) => {
+                const next = e.target.value;
+                setProvider(next);
+                const entry = catalog?.providers.find((p) => p.id === next);
+                setModel(entry?.models[0]?.id ?? "");
+              }}
+            >
+              {(catalog?.providers ?? []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.displayName}
+                </option>
+              ))}
+              {!catalog?.providers.length && <option value="">loading…</option>}
+            </Select>
           </div>
-          <div className="flex gap-2">
+
+          <div className="w-full lg:w-52">
+            <Select label="Model" value={effectiveModel} onChange={(e) => setModel(e.target.value)}>
+              {(activeProvider?.models ?? []).map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.displayName}
+                </option>
+              ))}
+              {!activeProvider?.models.length && <option value="">default</option>}
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[12px] font-medium text-text-secondary">Window</span>
+            <SegmentedControl
+              value={String(days)}
+              onChange={(v) => setDays(Number(v) as Days)}
+              options={[
+                { value: "3", label: "3 days" },
+                { value: "7", label: "7 days" },
+                { value: "30", label: "30 days" },
+              ]}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
             <Button
+              variant="primary"
               size="sm"
               disabled={busy}
               onClick={() => void runGenerate(mode === "tips")}
               title={mode === "tips" ? "Stream tokens as they arrive" : undefined}
             >
-              <MagicWand width={13} height={13} />
-              {busy
-                ? streaming
-                  ? "Streaming…"
-                  : "Generating…"
-                : mode === "tips"
-                  ? "Generate (stream)"
-                  : "Generate"}
+              <Sparks width={13} height={13} />
+              {busy ? (streaming ? "Streaming…" : "Generating…") : "Generate"}
             </Button>
             {mode === "tips" && (
               <Button size="sm" disabled={busy} onClick={() => void runGenerate(false)}>
@@ -223,10 +212,16 @@ export default function InsightsPage() {
             )}
           </div>
         </div>
+        {mode === "tips" && (
+          <p className="border-t border-border px-4 py-2.5 text-[11px] text-text-muted">
+            Generate streams tokens over SSE; one-shot returns the full response at once.
+          </p>
+        )}
       </Card>
 
-      {runError && (
-        <div className="mb-5">
+      {/* Results — full width, prioritised */}
+      <div className="flex flex-col gap-5">
+        {runError && (
           <AlertBanner
             title="Insight generation failed"
             description={runError}
@@ -237,73 +232,75 @@ export default function InsightsPage() {
               </Button>
             }
           />
-        </div>
-      )}
+        )}
 
-      {/* Result panel */}
-      {busy && !streamText && !result && (
-        <Card>
-          <Skeleton className="h-4 w-40" />
-          <div className="mt-4 flex flex-col gap-2">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-[92%]" />
-            <Skeleton className="h-4 w-[78%]" />
-          </div>
-        </Card>
-      )}
-
-      {(streamText || result) && (
-        <Card>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <h2 className="type-section text-text">
-                {mode === "tips" ? "Saving tips" : "Consumption overview"}
-              </h2>
-              {streaming && <Badge tone="accent" dot>streaming</Badge>}
-              {result?.periodAdjusted && (
-                <Badge tone="warning">
-                  window adjusted → {result.effectiveDays}d
-                </Badge>
+        {busy && !hasOutput ? (
+          <Card>
+            <Skeleton className="h-4 w-40" />
+            <div className="mt-4 flex flex-col gap-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-[92%]" />
+              <Skeleton className="h-4 w-[78%]" />
+              <Skeleton className="h-4 w-[85%]" />
+            </div>
+          </Card>
+        ) : hasOutput ? (
+          <Card className="p-0">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-1 px-5 py-3.5">
+              <div className="flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-[var(--radius-sm)] bg-accent-soft text-accent-text">
+                  <Sparks width={13} height={13} />
+                </span>
+                <h2 className="type-section text-text">
+                  {mode === "tips" ? "Recommended actions" : "Consumption analysis"}
+                </h2>
+                {streaming && (
+                  <Badge tone="accent" dot>
+                    streaming
+                  </Badge>
+                )}
+                {result?.periodAdjusted && (
+                  <Badge tone="warning">window adjusted → {result.effectiveDays}d</Badge>
+                )}
+              </div>
+              {result && (
+                <span className="text-[11px] text-text-muted">
+                  usage {kwh(result.energyUsage)} kWh ·{" "}
+                  {(result.metrics?.model ?? effectiveModel) || "default model"}
+                </span>
               )}
             </div>
-            {result && (
-              <span className="font-mono text-[11px] text-text-muted">
-                usage {kwh(result.energyUsage)} kWh · {(result.metrics?.model ?? effectiveModel) || "default model"}
-              </span>
-            )}
-          </div>
 
-          <div className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-text-secondary">
-            {mode === "tips" && streamText
-              ? streamText
-              : result?.tips || "No content returned."}
-            {streaming && (
-              <span className="ml-0.5 inline-block h-3.5 w-[7px] translate-y-[2px] animate-pulse bg-accent" />
-            )}
-          </div>
-
-          {result?.metrics && (
-            <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-3 font-mono text-[10.5px] text-text-muted">
-              {result.metrics.provider && <span>provider={result.metrics.provider}</span>}
-              {result.metrics.model && <span>model={result.metrics.model}</span>}
-              {result.metrics.totalTokens != null && (
-                <span>tokens={result.metrics.totalTokens}</span>
-              )}
-              {result.metrics.latencyMs != null && (
-                <span>latency={result.metrics.latencyMs}ms</span>
+            <div className="whitespace-pre-wrap px-5 py-4 text-[13.5px] leading-relaxed text-text-secondary">
+              {mode === "tips" && streamText
+                ? streamText
+                : result?.tips || "No content returned."}
+              {streaming && (
+                <span className="ml-0.5 inline-block h-3.5 w-[7px] translate-y-[2px] animate-pulse bg-accent" />
               )}
             </div>
-          )}
-        </Card>
-      )}
 
-      {!busy && !result && !streamText && !runError && (
-        <EmptyState
-          icon={<MagicWand width={22} height={22} />}
-          title="No insight generated yet"
-          description="Pick a provider and window above, then generate. Tips stream token-by-token over SSE; the overview is a single JSON response."
-        />
-      )}
+            {result?.metrics && (
+              <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-border px-5 py-3 font-mono text-[10.5px] text-text-muted">
+                {result.metrics.provider && <span>provider={result.metrics.provider}</span>}
+                {result.metrics.model && <span>model={result.metrics.model}</span>}
+                {result.metrics.totalTokens != null && (
+                  <span>tokens={result.metrics.totalTokens}</span>
+                )}
+                {result.metrics.latencyMs != null && (
+                  <span>latency={result.metrics.latencyMs}ms</span>
+                )}
+              </div>
+            )}
+          </Card>
+        ) : (
+          <EmptyState
+            icon={<MagicWand width={22} height={22} />}
+            title="No insight generated yet"
+            description="Pick a provider and window above, then generate. Recommendations stream token-by-token over SSE; the overview returns a single JSON response."
+          />
+        )}
+      </div>
     </>
   );
 }
@@ -315,8 +312,8 @@ function InsightsSkeleton() {
         <Skeleton className="h-8 w-32" />
         <Skeleton className="mt-2 h-4 w-64" />
       </div>
-      <Skeleton className="mb-5 h-44 w-full" />
-      <Skeleton className="h-64 w-full" />
+      <Skeleton className="mb-5 h-24 w-full" />
+      <Skeleton className="h-72 w-full" />
     </>
   );
 }

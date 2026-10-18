@@ -1,13 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
-import { Calendar, Database, Refresh, WarningTriangle, WifiOff } from "iconoir-react";
+import { useState, type ComponentType, type ReactNode } from "react";
 import {
   Area,
   AreaChart,
   ResponsiveContainer,
 } from "recharts";
+import {
+  Bell,
+  Calendar,
+  Cpu,
+  GraphUp,
+  Refresh,
+  WarningTriangle,
+  WifiOff,
+} from "iconoir-react";
 import { useSession } from "@/components/session";
 import { PageHeader } from "@/components/page-header";
 import {
@@ -58,10 +66,7 @@ export default function OverviewPage() {
         <EmptyState
           icon={<WifiOff width={22} height={22} />}
           title="Demo backend unreachable"
-          description={
-            error ??
-            "The request to the Next.js API layer failed. Retry in a moment."
-          }
+          description={error ?? "The request to the Next.js API layer failed. Retry in a moment."}
           actions={
             <Button variant="primary" onClick={() => void refresh()}>
               Retry connection
@@ -77,7 +82,6 @@ export default function OverviewPage() {
       <>
         <PageHeader title="Overview" description="House-wide consumption at a glance" />
         <EmptyState
-          icon={<Database width={22} height={22} />}
           title="Demo session not initialized"
           description={
             error ??
@@ -122,28 +126,33 @@ export default function OverviewPage() {
     void coverage.reload();
   };
 
-  /** Any panel still revalidating after a manual refresh. */
   const refreshing =
-    devices.refreshing || usage.refreshing || series.refreshing || alerts.refreshing || coverage.refreshing;
+    devices.refreshing ||
+    usage.refreshing ||
+    series.refreshing ||
+    alerts.refreshing ||
+    coverage.refreshing;
 
   async function toggleAlerting(next: boolean) {
     try {
       const updated = await updateUser(userId!, { alerting: next });
       patchUser(updated);
     } catch {
-      // keep prior state; the badge/toggle simply reflects the last known value
+      // keep prior state; the toggle reflects the last known value
     }
   }
+
+  const usageLoading = usage.loading || usage.refreshing;
+  const seriesLoading = series.loading || series.refreshing;
 
   return (
     <>
       <PageHeader
-        overline="Overview"
-        title="Energy consumption"
-        description="Track your energy usage, monitor thresholds, and keep your home running efficiently."
+        title="Overview"
+        description="Monitor your home energy usage, device status and system health."
         actions={
           <>
-            <span className="inline-flex items-center gap-2 rounded-[10px] border border-border bg-surface-0 px-3 py-1.5 text-[12px] font-medium text-text-secondary">
+            <span className="inline-flex items-center gap-1.5 rounded-[var(--radius)] border border-border bg-surface-0 px-2.5 py-1.5 text-[12px] font-medium text-text-secondary">
               <Calendar width={13} height={13} className="text-text-muted" />
               Last 7 days
             </span>
@@ -156,7 +165,7 @@ export default function OverviewPage() {
       />
 
       {failedPanels.length > 0 && (
-        <div className="mb-4">
+        <div className="mb-5">
           <AlertBanner
             tone="warning"
             title={`Partial data — ${failedPanels.length} panel${failedPanels.length > 1 ? "s" : ""} failed to load`}
@@ -170,69 +179,14 @@ export default function OverviewPage() {
         </div>
       )}
 
-      {/* KPI row */}
-      <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          label="Total consumption"
-          value={usage.loading || usage.refreshing ? null : kwh(totalKwh)}
-          unit="kWh"
-          sub={
-            usage.error
-              ? usage.error.status === 0
-                ? "Usage service unreachable"
-                : `Error ${usage.error.status}`
-              : `Across ${deviceList.length} device${deviceList.length === 1 ? "" : "s"} · 7d`
-          }
-          subTone={usage.error ? "critical" : undefined}
-          onRetry={usage.error ? () => void usage.reload() : undefined}
-          spark={sparkValues}
-        />
-        <KpiCard
-          label="Monitored devices"
-          value={devices.loading || devices.refreshing ? null : String(registryCount)}
-          unit=""
-          sub={
-            devices.error
-              ? "Registry unreachable"
-              : registryCount === 0
-                ? "No hardware registered"
-                : "active devices"
-          }
-          subTone={devices.error ? "critical" : undefined}
-          onRetry={devices.error ? () => void devices.reload() : undefined}
-        />
-        <KpiCard
-          label="Threshold status"
-          value={user.alerting ? "Armed" : "Muted"}
-          unit=""
-          valueText
-          sub="System-wide monitoring"
-          right={
-            <Switch
-              checked={user.alerting}
-              onChange={(v) => void toggleAlerting(v)}
-              disabled={Boolean(usage.loading) || usage.refreshing}
-              label="Toggle threshold alerting"
-            />
-          }
-        />
-        <KpiCard
-          label="Avg. per day"
-          value={usage.loading || usage.refreshing ? null : kwh(avgPerDay)}
-          unit="kWh"
-          sub="Mean over the 7-day window"
-        />
-      </div>
-
-      {/* Chart + right column */}
-      <div className="mb-5 grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
-        {/* Consumption trend */}
-        <Card className="lg:col-span-8">
+      {/* Analytical lead: trend as the primary element, KPIs supporting it */}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+        <Card className="xl:col-span-8">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h2 className="type-section tracking-tight text-text">Consumption trend</h2>
-              <p className="mt-1 text-[12px] text-text-secondary">
-                Total energy consumption (all devices) · real values, not interpolated
+              <h2 className="type-section text-text">Energy consumption</h2>
+              <p className="mt-0.5 text-[12px] text-text-secondary">
+                Aggregate load across every monitored device
               </p>
             </div>
             <SegmentedControl
@@ -245,8 +199,8 @@ export default function OverviewPage() {
             />
           </div>
 
-          {series.loading || series.refreshing ? (
-            <Skeleton className="h-80 w-full" />
+          {seriesLoading ? (
+            <Skeleton className="h-72 w-full" />
           ) : series.error ? (
             <InlineFetchError
               message={
@@ -278,7 +232,7 @@ export default function OverviewPage() {
                   </Link>
                 </>
               }
-              className="border-0"
+              className="border-0 shadow-none"
             />
           ) : (
             <>
@@ -291,129 +245,102 @@ export default function OverviewPage() {
             </>
           )}
 
-          <div className="mt-4 flex flex-col gap-2 rounded-[var(--radius)] border border-border bg-surface-1 px-3.5 py-3 text-[11px] text-text-secondary sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-4 flex flex-col gap-2 border-t border-border pt-3 text-[11px] text-text-secondary sm:flex-row sm:items-center sm:justify-between">
             <span className="flex items-center gap-2">
               <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden>
-                <line x1="0" y1="6" x2="18" y2="6" stroke="var(--critical)" strokeWidth="1.5" strokeDasharray="4 3" />
+                <line
+                  x1="0"
+                  y1="6"
+                  x2="18"
+                  y2="6"
+                  stroke="var(--warning)"
+                  strokeWidth="1.5"
+                  strokeDasharray="4 3"
+                />
               </svg>
-              Threshold {kwh(threshold, 2)} kWh/bucket — buckets above the line raise a violation.
+              Limit {kwh(threshold, 2)} kWh/bucket — buckets above the line raise a violation.
             </span>
             {cov && (
               <span
-                className={`font-mono text-[10px] text-text-muted transition-opacity ${
+                className={`text-[11px] text-text-muted transition-opacity ${
                   coverage.refreshing ? "opacity-40" : ""
                 }`}
               >
                 Coverage {cov.daysWithData}/{cov.maxDays} days
-                {cov.devicesWithNoData.length > 0 && ` · ${cov.devicesWithNoData.length} silent`}
+                {cov.devicesWithNoData.length > 0 &&
+                  ` · ${cov.devicesWithNoData.length} silent`}
               </span>
             )}
           </div>
         </Card>
 
-        {/* Right column */}
-        <div className="flex flex-col gap-5 lg:col-span-4">
-          {/* Energy by device */}
-          <Card>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="type-section tracking-tight text-text">Energy by device</h2>
-              <Link
-                href="/devices"
-                className="text-[12px] font-medium text-accent-text hover:text-accent"
-              >
-                View all
-              </Link>
-            </div>
-            {usage.loading || usage.refreshing ? (
-              <div className="flex flex-col gap-3">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-12 w-full" />
-                ))}
-              </div>
-            ) : usage.error ? (
-              <InlineFetchError
-                message={usage.error.status === 0 ? "Usage service unreachable." : `Error ${usage.error.status}.`}
-                onRetry={() => void usage.reload()}
-              />
-            ) : deviceList.length === 0 ? (
-              <p className="py-6 text-center text-[12px] text-text-muted">No device usage yet.</p>
-            ) : (
-              <ul className="flex flex-col gap-3.5">
-                {deviceList.slice(0, 4).map((d) => {
-                  const meta = deviceMeta(d.type);
-                  const Icon = meta.icon;
-                  const share = totalKwh > 0 ? (d.energyConsumed / totalKwh) * 100 : 0;
-                  return (
-                    <li key={`${d.deviceId ?? d.name}-${d.name}`}>
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border ${meta.tint}`}
-                        >
-                          <Icon width={15} height={15} />
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-baseline justify-between gap-2">
-                            <span className="truncate text-[13px] font-medium text-text">
-                              {d.name}
-                            </span>
-                            <span className="shrink-0 font-mono text-[12px] font-semibold tabular text-text">
-                              {kwh(d.energyConsumed)}{" "}
-                              <span className="font-normal text-text-muted">kWh</span>
-                            </span>
-                          </div>
-                          <div className="mt-1.5 flex items-center gap-2">
-                            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
-                              <div
-                                className="h-full rounded-full bg-accent"
-                                style={{ width: `${Math.max(3, (d.energyConsumed / maxEnergy) * 100)}%` }}
-                              />
-                            </div>
-                            <span className="shrink-0 font-mono text-[10px] tabular text-text-muted">
-                              {percent(share)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </Card>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:col-span-4 xl:grid-cols-1">
+          <KpiCard
+            className="sm:col-span-2 xl:col-span-1"
+            icon={GraphUp}
+            label="Total consumption"
+            value={usageLoading ? null : kwh(totalKwh)}
+            unit="kWh"
+            sub={
+              usage.error
+                ? usage.error.status === 0
+                  ? "Usage service unreachable"
+                  : `Error ${usage.error.status}`
+                : `Across ${deviceList.length} device${deviceList.length === 1 ? "" : "s"} · 7 days`
+            }
+            subTone={usage.error ? "critical" : undefined}
+            onRetry={usage.error ? () => void usage.reload() : undefined}
+            spark={sparkValues}
+          />
 
-          {/* Threshold & alerts */}
-          <Card>
-            <div className="mb-3">
-              <h2 className="type-section tracking-tight text-text">Threshold &amp; alerts</h2>
-            </div>
-            <div className="text-[11px] text-text-muted">Current limit</div>
-            <div className="mt-1 font-mono text-[24px] font-semibold tabular tracking-tight text-text">
-              {kwh(threshold, 1)}{" "}
-              <span className="text-[12px] font-normal text-text-muted">kWh / bucket</span>
-            </div>
-            <div className="mt-4 flex items-center justify-between border-t border-border pt-3.5">
-              <div>
-                <div className="text-[12px] font-medium text-text">Edge-triggered alerting</div>
-                <div className="text-[11px] text-text-muted">
-                  {user.alerting ? "Enabled" : "Disabled"} · fires once per crossing
-                </div>
-              </div>
-              <Switch
-                checked={user.alerting}
-                onChange={(v) => void toggleAlerting(v)}
-                label="Toggle edge-triggered alerting"
-              />
-            </div>
+          <Card className="divide-y divide-border p-0 sm:col-span-2 xl:col-span-1">
+            <Readout
+              icon={Calendar}
+              label="Daily average"
+              value={usageLoading ? null : kwh(avgPerDay)}
+              unit="kWh"
+              sub="Mean over the window"
+            />
+            <Readout
+              icon={Cpu}
+              label="Monitored devices"
+              value={devices.loading || devices.refreshing ? null : String(registryCount)}
+              sub={
+                devices.error
+                  ? "Registry unreachable"
+                  : registryCount === 0
+                    ? "No hardware registered"
+                    : "Active this week"
+              }
+              subTone={devices.error ? "critical" : undefined}
+              onRetry={devices.error ? () => void devices.reload() : undefined}
+            />
+            <Readout
+              icon={Bell}
+              label="Threshold status"
+              value={user.alerting ? "Armed" : "Muted"}
+              valueText
+              sub={
+                registryCount > 0
+                  ? `Fire limit ${kwh(threshold, 0)} kWh/bucket`
+                  : "System-wide monitoring"
+              }
+              right={
+                <Switch
+                  checked={user.alerting}
+                  onChange={(v) => void toggleAlerting(v)}
+                  label="Toggle threshold alerting"
+                />
+              }
+            />
           </Card>
         </div>
       </div>
-
-      {/* Recent devices + incidents */}
-      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
-        {/* Recent devices table */}
-        <Card className="lg:col-span-8">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="type-section tracking-tight text-text">Recent devices</h2>
+      {/* Breakdown + incidents */}
+      <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-12">
+        <Card className="lg:col-span-7">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <h2 className="type-section text-text">Energy by device</h2>
             <Link
               href="/devices"
               className="text-[12px] font-medium text-accent-text hover:text-accent"
@@ -421,80 +348,70 @@ export default function OverviewPage() {
               View all
             </Link>
           </div>
-          {usage.loading || usage.refreshing ? (
-            <Skeleton className="h-40 w-full" />
+          {usageLoading ? (
+            <div className="flex flex-col gap-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
           ) : usage.error ? (
             <InlineFetchError
-              message={usage.error.status === 0 ? "Usage service unreachable." : `Error ${usage.error.status}.`}
+              message={
+                usage.error.status === 0 ? "Usage service unreachable." : `Error ${usage.error.status}.`
+              }
               onRetry={() => void usage.reload()}
             />
           ) : deviceList.length === 0 ? (
-            <EmptyState
-              title="No devices yet"
-              description="Devices you register will appear here with their 7-day usage."
-              actions={
-                <Link href="/devices">
-                  <Button size="sm">Manage devices</Button>
-                </Link>
-              }
-              className="border-0 py-8"
-            />
+            <p className="py-6 text-center text-[12px] text-text-muted">No device usage yet.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] border-collapse text-left">
-                <thead>
-                  <tr className="border-b border-border">
-                    {["Device", "Type", "Location", "7D usage", "Share"].map((h, i) => (
-                      <th
-                        key={h}
-                        className={`overline pb-2 ${i >= 3 ? "text-right" : ""}`}
+            <ul className="flex flex-col gap-4">
+              {deviceList.slice(0, 5).map((d) => {
+                const meta = deviceMeta(d.type);
+                const Icon = meta.icon;
+                const share = totalKwh > 0 ? (d.energyConsumed / totalKwh) * 100 : 0;
+                return (
+                  <li key={`${d.deviceId ?? d.name}-${d.name}`}>
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] border ${meta.tint}`}
                       >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {deviceList.map((d) => {
-                    const meta = deviceMeta(d.type);
-                    const Icon = meta.icon;
-                    const share = totalKwh > 0 ? (d.energyConsumed / totalKwh) * 100 : 0;
-                    return (
-                      <tr
-                        key={`${d.deviceId ?? d.name}-${d.name}`}
-                        className="border-b border-border last:border-b-0"
-                      >
-                        <td className="py-2.5">
-                          <div className="flex items-center gap-2.5">
-                            <span
-                              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${meta.tint}`}
-                            >
-                              <Icon width={13} height={13} />
-                            </span>
-                            <span className="text-[13px] font-medium text-text">{d.name}</span>
+                        <Icon width={15} height={15} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-[13px] font-medium text-text">
+                            {d.name}
+                          </span>
+                          <span className="shrink-0 text-[12.5px] font-semibold tabular text-text">
+                            {kwh(d.energyConsumed)}{" "}
+                            <span className="font-normal text-text-muted">kWh</span>
+                          </span>
+                        </div>
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+                            <div
+                              className="h-full rounded-full bg-accent"
+                              style={{
+                                width: `${Math.max(3, (d.energyConsumed / maxEnergy) * 100)}%`,
+                              }}
+                            />
                           </div>
-                        </td>
-                        <td className="py-2.5 text-[12px] text-text-secondary">{meta.label}</td>
-                        <td className="py-2.5 text-[12px] text-text-secondary">{d.location}</td>
-                        <td className="py-2.5 text-right font-mono text-[12px] font-semibold tabular text-text">
-                          {kwh(d.energyConsumed)} <span className="font-normal text-text-muted">kWh</span>
-                        </td>
-                        <td className="py-2.5 text-right font-mono text-[12px] tabular text-text-secondary">
-                          {percent(share)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                          <span className="shrink-0 text-[11px] tabular text-text-muted">
+                            {percent(share)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </Card>
 
-        {/* Recent incidents */}
-        <Card className="lg:col-span-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="type-section tracking-tight text-text">Recent incidents</h2>
+        <Card className="lg:col-span-5">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <h2 className="type-section text-text">Recent incidents</h2>
             <Link
               href="/alerts"
               className="text-[12px] font-medium text-accent-text hover:text-accent"
@@ -510,7 +427,9 @@ export default function OverviewPage() {
             </div>
           ) : alerts.error ? (
             <InlineFetchError
-              message={alerts.error.status === 0 ? "Alert service unreachable." : `Error ${alerts.error.status}.`}
+              message={
+                alerts.error.status === 0 ? "Alert service unreachable." : `Error ${alerts.error.status}.`
+              }
               onRetry={() => void alerts.reload()}
             />
           ) : recentAlerts.length === 0 ? (
@@ -518,7 +437,7 @@ export default function OverviewPage() {
               No incidents recorded. Quiet grid.
             </p>
           ) : (
-            <ul className="flex flex-col">
+            <ul className="flex flex-col divide-y divide-border">
               {recentAlerts.slice(0, 4).map((a) => (
                 <IncidentRow key={a.id} alert={a} />
               ))}
@@ -536,8 +455,74 @@ export default function OverviewPage() {
 }
 
 /* ---------- KPI card ---------- */
+/* ---------- compact readout row (inside a shared panel) ---------- */
+
+function Readout({
+  icon: Icon,
+  label,
+  value,
+  unit,
+  sub,
+  subTone,
+  onRetry,
+  valueText = false,
+  right,
+}: {
+  icon: ComponentType<{ width?: number; height?: number; className?: string }>;
+  label: string;
+  value: string | null;
+  unit?: string;
+  sub: string;
+  subTone?: "critical";
+  onRetry?: () => void;
+  valueText?: boolean;
+  right?: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-3 px-5 py-3.5">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-surface-2 text-text-secondary">
+        <Icon width={14} height={14} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[11.5px] text-text-secondary">{label}</div>
+        <div className="mt-1 flex items-baseline gap-1.5">
+          {value === null ? (
+            <Skeleton className="h-5 w-16" />
+          ) : (
+            <span
+              className={`tabular font-semibold leading-none text-text ${
+                valueText ? "text-[16px]" : "text-[20px] tracking-tight"
+              }`}
+            >
+              {value}
+            </span>
+          )}
+          {unit && <span className="text-[11px] text-text-muted">{unit}</span>}
+        </div>
+        <p
+          className={`mt-1 text-[11px] ${
+            subTone === "critical" ? "text-critical-text" : "text-text-muted"
+          }`}
+        >
+          {sub}
+          {onRetry && (
+            <>
+              {" · "}
+              <button onClick={onRetry} className="underline hover:no-underline">
+                retry
+              </button>
+            </>
+          )}
+        </p>
+      </div>
+      {right}
+    </div>
+  );
+}
+
 
 function KpiCard({
+  icon: Icon,
   label,
   value,
   unit,
@@ -546,29 +531,41 @@ function KpiCard({
   onRetry,
   spark,
   valueText = false,
+  className,
   right,
 }: {
+  icon: ComponentType<{ width?: number; height?: number; className?: string }>;
   label: string;
   value: string | null;
-  unit: string;
+  unit?: string;
   sub: string;
   subTone?: "critical";
   onRetry?: () => void;
   spark?: number[];
   valueText?: boolean;
+  className?: string;
   right?: ReactNode;
 }) {
   return (
-    <Card className="flex flex-col">
-      <span className="text-[12px] font-medium text-text-muted">{label}</span>
-      <div className="mt-2 flex items-end justify-between gap-2">
+    <Card className={className}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-sm)] bg-accent-soft text-accent-text">
+            <Icon width={14} height={14} />
+          </span>
+          <span className="text-[12px] font-medium text-text-secondary">{label}</span>
+        </div>
+        {right}
+      </div>
+
+      <div className="mt-3 flex items-end justify-between gap-3">
         <div className="flex items-baseline gap-1.5">
           {value === null ? (
-            <Skeleton className="h-8 w-20" />
+            <Skeleton className="h-8 w-24" />
           ) : (
             <span
-              className={`tabular font-mono font-semibold leading-none tracking-tight text-text ${
-                valueText ? "text-[22px]" : "type-kpi"
+              className={`tabular font-semibold leading-none tracking-tight text-text ${
+                valueText ? "text-[22px]" : "text-[28px]"
               }`}
             >
               {value}
@@ -577,10 +574,12 @@ function KpiCard({
           {unit && <span className="text-[12px] text-text-muted">{unit}</span>}
         </div>
         {spark && spark.length > 1 && <Sparkline data={spark} />}
-        {right}
       </div>
+
       <p
-        className={`mt-2 text-[11px] ${subTone === "critical" ? "text-critical-text" : "text-text-muted"}`}
+        className={`mt-3 text-[11px] ${
+          subTone === "critical" ? "text-critical-text" : "text-text-muted"
+        }`}
       >
         {sub}
         {onRetry && (
@@ -606,7 +605,7 @@ function Sparkline({ data }: { data: number[] }) {
             type="monotone"
             dataKey="v"
             stroke="var(--accent)"
-            strokeWidth={2}
+            strokeWidth={1.5}
             fill="var(--accent-soft)"
             dot={false}
           />
@@ -621,9 +620,9 @@ function Sparkline({ data }: { data: number[] }) {
 function IncidentRow({ alert }: { alert: AlertDto }) {
   const over = alert.energyConsumed > alert.threshold;
   return (
-    <li className="flex items-start gap-3 border-b border-border py-3 last:border-b-0">
+    <li className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
       <span
-        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] ${
           over ? "bg-critical-soft text-critical-text" : "bg-warning-soft text-warning-text"
         }`}
       >
@@ -637,7 +636,10 @@ function IncidentRow({ alert }: { alert: AlertDto }) {
           <Badge tone={over ? "critical" : "warning"}>{over ? "High" : "Warning"}</Badge>
         </div>
         <p className="mt-0.5 text-[12px] text-text-secondary">
-          Load <strong className="font-mono text-critical-text">{kwh(alert.energyConsumed, 2)} kWh</strong>{" "}
+          Load{" "}
+          <strong className={over ? "text-critical-text" : "text-text"}>
+            {kwh(alert.energyConsumed, 2)} kWh
+          </strong>{" "}
           &gt; {kwh(alert.threshold, 2)} kWh limit
         </p>
         <div className="mt-0.5 font-mono text-[10px] text-text-muted">
@@ -670,16 +672,11 @@ function DashboardSkeleton() {
         <Skeleton className="h-8 w-56" />
         <Skeleton className="mt-2 h-4 w-80" />
       </div>
-      <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-32" />
-        ))}
-      </div>
-      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
-        <Skeleton className="h-96 lg:col-span-8" />
-        <div className="flex flex-col gap-5 lg:col-span-4">
-          <Skeleton className="h-56" />
-          <Skeleton className="h-44" />
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+        <Skeleton className="h-96 xl:col-span-8" />
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:col-span-4 xl:grid-cols-1">
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
         </div>
       </div>
     </>

@@ -1,7 +1,16 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import { Cpu, EditPencil, MapPin, Plus, Refresh, Trash, WifiOff } from "iconoir-react";
+import {
+  Cpu,
+  EditPencil,
+  MapPin,
+  Plus,
+  Refresh,
+  Search,
+  Trash,
+  WifiOff,
+} from "iconoir-react";
 import { clsx } from "clsx";
 import { PageHeader } from "@/components/page-header";
 import { useSession } from "@/components/session";
@@ -19,12 +28,14 @@ import {
 import {
   createDevice,
   deleteDevice,
+  getCoverage,
   getDevicesByUser,
+  getUsage,
   updateDevice,
 } from "@/lib/api";
 import { useAsync } from "@/lib/use-async";
 import { DEVICE_META, deviceMeta } from "@/lib/device-meta";
-import { compactDateTime } from "@/lib/format";
+import { compactDateTime, kwh } from "@/lib/format";
 import { DEVICE_TYPES, type DeviceDto, type DeviceType } from "@/lib/types";
 
 type ModalMode = { kind: "create" } | { kind: "edit"; device: DeviceDto } | null;
@@ -35,6 +46,8 @@ export default function DevicesPage() {
   const devices = useAsync<DeviceDto[]>(() => getDevicesByUser(userId!), [userId], {
     enabled: userId != null,
   });
+  const usage = useAsync(() => getUsage(userId!, 7), [userId], { enabled: userId != null });
+  const coverage = useAsync(() => getCoverage(userId!), [userId], { enabled: userId != null });
 
   const [modal, setModal] = useState<ModalMode>(null);
   const [detail, setDetail] = useState<DeviceDto | null>(null);
@@ -42,15 +55,41 @@ export default function DevicesPage() {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const grouped = useMemo(() => {
-    const map = new Map<DeviceType, DeviceDto[]>();
-    for (const d of devices.data ?? []) {
-      const list = map.get(d.type) ?? [];
-      list.push(d);
-      map.set(d.type, list);
-    }
-    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"" | DeviceType>("");
+  const [locationFilter, setLocationFilter] = useState("");
+
+  const locations = useMemo(() => {
+    const set = new Set<string>();
+    for (const d of devices.data ?? []) set.add(d.location);
+    return [...set].sort((a, b) => a.localeCompare(b));
   }, [devices.data]);
+
+  const usageById = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const d of usage.data?.devices ?? []) {
+      if (d.deviceId != null) map.set(d.deviceId, d.energyConsumed);
+    }
+    return map;
+  }, [usage.data]);
+
+  const noData = useMemo(
+    () => new Set(coverage.data?.devicesWithNoData ?? []),
+    [coverage.data],
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (devices.data ?? []).filter((d) => {
+      if (typeFilter && d.type !== typeFilter) return false;
+      if (locationFilter && d.location !== locationFilter) return false;
+      if (q) {
+        const hay = `${d.name} ${d.location} ${d.deviceId}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [devices.data, query, typeFilter, locationFilter]);
 
   async function handleDelete(device: DeviceDto) {
     setBusy(true);
@@ -60,11 +99,20 @@ export default function DevicesPage() {
       setPendingDelete(null);
       setDetail(null);
       devices.reload();
+      usage.reload();
+      coverage.reload();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Failed to delete device.");
     } finally {
       setBusy(false);
     }
+  }
+
+  function statusOf(d: DeviceDto): { tone: "success" | "warning" | "neutral"; label: string } {
+    if (coverage.loading) return { tone: "neutral", label: "—" };
+    return noData.has(d.deviceId)
+      ? { tone: "warning", label: "No data" }
+      : { tone: "success", label: "Reporting" };
   }
 
   if (status === "loading") return <DevicesSkeleton />;
@@ -77,18 +125,24 @@ export default function DevicesPage() {
           icon={<WifiOff width={22} height={22} />}
           title={status === "missing" ? "Demo session not initialized" : "Demo backend unreachable"}
           description={error ?? "The request to the Next.js API layer failed. Retry in a moment."}
-          actions={<Button variant="primary" onClick={() => void refresh()}>Retry</Button>}
+          actions={
+            <Button variant="primary" onClick={() => void refresh()}>
+              Retry
+            </Button>
+          }
         />
       </>
     );
   }
 
+  const total = devices.data?.length ?? 0;
+  const filtersActive = Boolean(query || typeFilter || locationFilter);
+
   return (
     <>
       <PageHeader
-        overline="Devices"
-        title="Registry"
-        description={`${devices.data?.length ?? 0} registered nodes for ${user.name || user.email}`}
+        title="Devices"
+        description={`Manage your ${total} registered device${total === 1 ? "" : "s"} and their status.`}
         actions={
           <>
             <Button size="sm" onClick={devices.reload} disabled={devices.refreshing}>
@@ -100,7 +154,7 @@ export default function DevicesPage() {
               {devices.refreshing ? "Refreshing…" : "Refresh"}
             </Button>
             <Button variant="primary" size="sm" onClick={() => setModal({ kind: "create" })}>
-              <Plus width={14} height={14} /> Register device
+              <Plus width={14} height={14} /> Add device
             </Button>
           </>
         }
@@ -108,7 +162,11 @@ export default function DevicesPage() {
 
       {actionError && (
         <div className="mb-4">
-          <AlertBanner title="Action failed" description={actionError} onDismiss={() => setActionError(null)} />
+          <AlertBanner
+            title="Action failed"
+            description={actionError}
+            onDismiss={() => setActionError(null)}
+          />
         </div>
       )}
       {devices.error && (
@@ -117,14 +175,64 @@ export default function DevicesPage() {
             tone="warning"
             title="Device registry unreachable"
             description={`GET /device/user/${user.userId} failed (${devices.error.status}).`}
-            action={<Button size="sm" onClick={devices.reload}>Retry</Button>}
+            action={
+              <Button size="sm" onClick={devices.reload}>
+                Retry
+              </Button>
+            }
           />
         </div>
       )}
 
+      {/* Filter bar */}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search
+            width={15}
+            height={15}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+          />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name, location, or ID…"
+            aria-label="Search devices"
+            className="field pl-9"
+          />
+        </div>
+        <div className="flex gap-3">
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as "" | DeviceType)}
+            aria-label="Filter by type"
+            className="field w-full sm:w-40"
+          >
+            <option value="">All types</option>
+            {DEVICE_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {DEVICE_META[t].label}
+              </option>
+            ))}
+          </select>
+          <select
+            value={locationFilter}
+            onChange={(e) => setLocationFilter(e.target.value)}
+            aria-label="Filter by location"
+            className="field w-full sm:w-44"
+          >
+            <option value="">All locations</option>
+            {locations.map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {devices.loading || devices.refreshing ? (
-        <DevicesSkeletonGrid />
-      ) : grouped.length === 0 ? (
+        <DevicesTableSkeleton />
+      ) : total === 0 ? (
         <EmptyState
           icon={<Cpu width={22} height={22} />}
           title="No devices registered"
@@ -135,52 +243,108 @@ export default function DevicesPage() {
             </Button>
           }
         />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={<Search width={22} height={22} />}
+          title="No matching devices"
+          description="No devices match the current filters. Clear them to see the full registry."
+          actions={
+            <Button
+              size="sm"
+              onClick={() => {
+                setQuery("");
+                setTypeFilter("");
+                setLocationFilter("");
+              }}
+            >
+              Clear filters
+            </Button>
+          }
+        />
       ) : (
-        <div className="flex flex-col gap-7">
-          {grouped.map(([type, list]) => {
-            const meta = DEVICE_META[type];
-            const Icon = meta.icon;
-            return (
-              <section key={type}>
-                <div className="mb-3 flex items-center gap-2">
-                  <span className={clsx("flex h-6 w-6 items-center justify-center rounded-md border", meta.tint)}>
-                    <Icon width={12} height={12} />
-                  </span>
-                  <h2 className="text-[13px] font-semibold text-text">{meta.label}s</h2>
-                  <span className="font-mono text-[11px] text-text-muted">{list.length}</span>
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-                  {list.map((d) => (
-                    <div
+        <div className="panel overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-border bg-surface-1">
+                  {["Device", "Type", "Location", "Status", "7d usage", "Last update"].map(
+                    (h, i) => (
+                      <th
+                        key={h}
+                        className={clsx(
+                          "px-4 py-2.5 text-[12px] font-medium text-text-muted",
+                          i === 4 && "text-right",
+                        )}
+                      >
+                        {h}
+                      </th>
+                    ),
+                  )}
+                  <th className="px-4 py-2.5" aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((d) => {
+                  const meta = deviceMeta(d.type);
+                  const Icon = meta.icon;
+                  const statusInfo = statusOf(d);
+                  const consumed = usageById.get(d.deviceId);
+                  return (
+                    <tr
                       key={d.deviceId}
-                      role="button"
-                      tabIndex={0}
                       onClick={() => setDetail(d)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          setDetail(d);
-                        }
-                      }}
-                      className="panel cursor-pointer p-4 transition-colors hover:border-border-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                      className="group cursor-pointer border-b border-border last:border-b-0 hover:bg-surface-1"
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <span className={clsx("flex h-9 w-9 shrink-0 items-center justify-center rounded-full border", meta.tint)}>
-                            <Icon width={15} height={15} />
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={clsx(
+                              "flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] border",
+                              meta.tint,
+                            )}
+                          >
+                            <Icon width={14} height={14} />
                           </span>
                           <div className="min-w-0">
-                            <div className="truncate text-[13.5px] font-semibold text-text">{d.name}</div>
-                            <div className="mt-0.5 flex items-center gap-1 truncate text-[11.5px] text-text-muted">
-                              <MapPin width={11} height={11} /> {d.location}
+                            <div className="truncate text-[13px] font-semibold text-text">
+                              {d.name}
+                            </div>
+                            <div className="font-mono text-[10.5px] text-text-muted">
+                              DEV-{String(d.deviceId).padStart(3, "0")}
                             </div>
                           </div>
                         </div>
-                        <Badge>{meta.label}</Badge>
-                      </div>
-                      <div className="mt-3.5 flex items-center justify-between border-t border-border pt-2.5">
-                        <span className="font-mono text-[10.5px] text-text-muted">ID {d.deviceId}</span>
-                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      </td>
+                      <td className="px-4 py-3 text-[12.5px] text-text-secondary">{meta.label}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1.5 text-[12.5px] text-text-secondary">
+                          <MapPin width={12} height={12} className="text-text-muted" />
+                          {d.location}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge tone={statusInfo.tone} dot={statusInfo.tone === "success"}>
+                          {statusInfo.label}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right text-[12.5px] font-semibold tabular text-text">
+                        {consumed != null ? (
+                          <>
+                            {kwh(consumed)}{" "}
+                            <span className="font-normal text-text-muted">kWh</span>
+                          </>
+                        ) : (
+                          <span className="text-text-muted">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-[11.5px] text-text-secondary">
+                        {compactDateTime(d.updatedAt)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div
+                          className="flex items-center justify-end gap-1 opacity-60 transition-opacity group-hover:opacity-100"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <Button
                             size="sm"
                             variant="ghost"
@@ -188,25 +352,31 @@ export default function DevicesPage() {
                             onClick={() => setModal({ kind: "edit", device: d })}
                             aria-label={`Edit ${d.name}`}
                           >
-                            <EditPencil width={12} height={12} />
+                            <EditPencil width={13} height={13} />
                           </Button>
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 px-2 text-critical-text hover:bg-critical-soft"
+                            className="h-7 px-2 text-critical-text hover:bg-critical-soft hover:text-critical-text"
                             onClick={() => setPendingDelete(d)}
                             aria-label={`Delete ${d.name}`}
                           >
-                            <Trash width={12} height={12} />
+                            <Trash width={13} height={13} />
                           </Button>
                         </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-[11px] text-text-muted">
+            <span>
+              Showing {filtered.length} of {total} device{total === 1 ? "" : "s"}
+            </span>
+            {filtersActive && <span>filters active</span>}
+          </div>
         </div>
       )}
 
@@ -259,6 +429,8 @@ export default function DevicesPage() {
           onSaved={() => {
             setModal(null);
             devices.reload();
+            usage.reload();
+            coverage.reload();
           }}
         />
       )}
@@ -282,7 +454,7 @@ export default function DevicesPage() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="overline">{label}</div>
+      <div className="text-[12px] font-medium text-text-secondary">{label}</div>
       <div className="mt-1 text-[13px] text-text">{children}</div>
     </div>
   );
@@ -317,7 +489,11 @@ function DeviceModal({
     setErr(null);
     try {
       if (editing) {
-        await updateDevice(editing.deviceId, { name: name.trim(), type, location: location.trim() });
+        await updateDevice(editing.deviceId, {
+          name: name.trim(),
+          type,
+          location: location.trim(),
+        });
       } else {
         await createDevice({ name: name.trim(), type, location: location.trim(), userId });
       }
@@ -416,16 +592,21 @@ function DevicesSkeleton() {
         <Skeleton className="h-8 w-36" />
         <Skeleton className="mt-2 h-4 w-56" />
       </div>
-      <DevicesSkeletonGrid />
+      <DevicesTableSkeleton />
     </>
   );
 }
 
-function DevicesSkeletonGrid() {
+function DevicesTableSkeleton() {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <Skeleton key={i} className="h-28" />
+    <div className="panel overflow-hidden">
+      <div className="border-b border-border bg-surface-1 px-4 py-3">
+        <Skeleton className="h-3 w-full" />
+      </div>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="border-b border-border px-4 py-4 last:border-b-0">
+          <Skeleton className="h-6 w-full" />
+        </div>
       ))}
     </div>
   );

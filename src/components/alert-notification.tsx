@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { Bell, Mail, X } from "iconoir-react";
-import { Button, Dialog } from "@/components/ui";
+import { Button, Dialog, Portal } from "@/components/ui";
 import { kwh } from "@/lib/format";
 import type { AlertDto } from "@/lib/types";
 
@@ -27,12 +27,13 @@ export function AlertToast({
   }, [alert.id, onClose]);
 
   return (
+    <Portal>
     <div
       role="status"
       className="toast-in fixed bottom-4 right-4 z-40 w-[min(92vw,360px)] rounded-[var(--radius)] border border-border bg-surface-0 p-4 shadow-[var(--shadow-elevated)]"
     >
       <div className="flex items-start gap-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-critical/28 bg-critical-soft text-critical-text">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] border border-critical/25 bg-critical-soft text-critical-text">
           <Bell width={15} height={15} />
         </span>
         <div className="min-w-0 flex-1">
@@ -57,6 +58,7 @@ export function AlertToast({
         </button>
       </div>
     </div>
+    </Portal>
   );
 }
 
@@ -74,8 +76,9 @@ export function AlertEmailPreview({
     <Dialog title="Alert email" onClose={onClose} width="max-w-lg">
       <div className="overflow-hidden rounded-[var(--radius)] border border-border">
         <div className="border-b border-border bg-surface-2 px-4 py-3">
+          <div className="overline mb-1">Alert notification</div>
           <div className="text-[13px] font-semibold text-text">
-            ⚠ Energy consumption threshold exceeded
+            Energy consumption threshold exceeded
           </div>
           <div className="mt-1.5 flex flex-col gap-0.5 font-mono text-[10.5px] text-text-muted">
             <span>
@@ -91,11 +94,11 @@ export function AlertEmailPreview({
           </p>
           <p className="mt-2 text-[12.5px] leading-relaxed text-text-secondary">
             Your aggregate energy use reached{" "}
-            <span className="font-mono font-semibold text-critical-text">
+            <span className="font-semibold tabular text-critical-text">
               {kwh(alert.energyConsumed, 2)} kWh
             </span>{" "}
             in a single evaluation window, crossing the limit you configured of{" "}
-            <span className="font-mono font-semibold text-text">
+            <span className="font-semibold tabular text-text">
               {kwh(alert.threshold, 0)} kWh
             </span>
             .
@@ -104,7 +107,7 @@ export function AlertEmailPreview({
             Open the dashboard to see the hour it happened and which devices were
             drawing power.
           </p>
-          <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-3 py-1 font-mono text-[10.5px] text-text-muted">
+          <div className="mt-4 inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-border bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-text-muted">
             <Mail width={12} height={12} />
             delivered · notification #{alert.id}
           </div>

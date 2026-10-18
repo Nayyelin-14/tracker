@@ -36,10 +36,11 @@ interface OnboardingBody {
 /**
  * `POST /user/demo` — first-run provisioning.
  *
- * `mode: "generate"` provisions the generated demo home (three devices, a week
- * of history, two seeded alerts). `mode: "custom"` creates the visitor's own
- * account with the devices they supplied and, optionally, generated history.
- * Either way the result lives entirely in the session cookie.
+ * `mode: "generate"` provisions a fresh, empty demo account (no devices, no
+ * alerts) that the visitor populates themselves. `mode: "custom"` creates the
+ * visitor's own account with the devices they supplied and, optionally,
+ * generated history. Either way the result lives entirely in the session
+ * cookie.
  */
 export async function POST(req: NextRequest) {
   const parsed = await readJson<OnboardingBody>(req);
@@ -113,7 +114,9 @@ export async function POST(req: NextRequest) {
 
   const state = await readState();
   state.init = true;
-  state.seed = mode === "generate";
+  // Nothing is pre-seeded: a fresh demo account starts empty so the visitor
+  // builds the home themselves (register devices, then dispatch readings).
+  state.seed = false;
   state.u = {
     a: alerting,
     t: Math.round(threshold * 100) / 100,
@@ -128,8 +131,8 @@ export async function POST(req: NextRequest) {
   state.s = [];
   state.A = [];
   state.br = { h: 0, t: state.u.t, v: false };
-  state.nd = state.d.length ? 1001 + state.d.length : 1004;
-  state.na = mode === "generate" ? 3 : 1;
+  state.nd = 1001 + state.d.length;
+  state.na = 1;
 
   if (!stateFits(state)) {
     return problem(
